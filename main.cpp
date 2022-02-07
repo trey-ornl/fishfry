@@ -32,13 +32,16 @@ int main(int argc, char **argv)
     MPI_Comm_rank(local,&lrank);
     int nd = 0;
     CHECK(hipGetDeviceCount(&nd));
-    const int target = lrank%nd;
-    CHECK(hipSetDevice(target));
-    int myd = -1;
-    CHECK(hipGetDevice(&myd));
-    MPI_Barrier(MPI_COMM_WORLD);
-    printf("# Task %d with node rank %d using device %d (%d devices per node)\n",rank,lrank,myd,nd);
-    fflush(stdout);
+    assert(nd > 0);
+    if (nd > 1) {
+      const int target = lrank%nd;
+      CHECK(hipSetDevice(target));
+      int myd = -1;
+      CHECK(hipGetDevice(&myd));
+      MPI_Barrier(MPI_COMM_WORLD);
+      printf("# Task %d with node rank %d using device %d (%d devices per node)\n",rank,lrank,myd,nd);
+      fflush(stdout);
+    }
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
