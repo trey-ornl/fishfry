@@ -9,7 +9,9 @@ $(EXE): $(OBJ)
 
 main.o: main.cpp FishFry.hpp gpu.hpp
 
-PoissonPeriodic3x1DBlockedGPU.o: PoissonPeriodic3x1DBlockedGPU.cpp PoissonPeriodic3x1DBlockedGPU.hpp gpu.hpp
+HenryPeriodic.o: HenryPeriodic.cpp HenryPeriodic.hpp gpu.hpp
+
+ParisPeriodic.o: ParisPeriodic.cpp ParisPeriodic.hpp gpu.hpp
 
 clean:
 	rm -f $(OBJ) $(EXE) core*
