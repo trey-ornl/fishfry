@@ -50,7 +50,7 @@ static void __attribute__((unused)) check(const hipfftResult err, const char *co
   exit(err);
 }
 
-static void check(const hipError_t err, const char *const file, const int line)
+static void __attribute__((unused)) check(const hipError_t err, const char *const file, const int line)
 {
   if (err == hipSuccess) return;
   fprintf(stderr,"HIP ERROR AT LINE %d OF FILE '%s': %s %s\n",line,file,hipGetErrorName(err),hipGetErrorString(err));

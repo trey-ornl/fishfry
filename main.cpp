@@ -1,5 +1,5 @@
 #include "FishFry.hpp"
-#include "PoissonPeriodic3x1DBlockedGPU.hpp"
+#include "ParisPeriodic.hpp"
 
 int main(int argc, char **argv)
 {
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
-  FishFry<PoissonPeriodic3x1DBlockedGPU>(nTasks,nPoints).run(nIters);
+  FishFry<ParisPeriodic>(nTasks,nPoints).run(nIters);
   MPI_Finalize();
   return 0;
 }
