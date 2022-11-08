@@ -1,5 +1,5 @@
 #include "FishFry.hpp"
-#include "ParisPeriodic.hpp"
+#include "ParisPencil.hpp"
 
 int main(int argc, char **argv)
 {
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
-  FishFry<ParisPeriodic>(nTasks,nPoints).run(nIters);
+  FishFry<ParisPencil>(nTasks,nPoints).run(nIters);
   MPI_Finalize();
   return 0;
 }

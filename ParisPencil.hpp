@@ -1,11 +1,11 @@
 #pragma once
 
-#include "HenryPeriodic.hpp"
+#include "HenryPencil.hpp"
 
 /**
  * @brief Periodic Poisson solver using @ref Henry FFT filter.
  */
-class ParisPeriodic {
+class ParisPencil {
   public:
 
     /**
@@ -17,7 +17,7 @@ class ParisPeriodic {
      * @param[in] m[3] { Number of MPI tasks in each dimension. }
      * @param[in] id[3] { Coordinates of this MPI task, starting at `{0,0,0}`. }
      */
-    ParisPeriodic(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]);
+    ParisPencil(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]);
 
     /**
      * @return { Number of bytes needed for array arguments for @ref solve. }
@@ -44,5 +44,5 @@ class ParisPeriodic {
     int nk_; //!< Number of elements in Z dimension
 #endif
     double ddi_,ddj_,ddk_; //!< Frequency-independent terms in Poisson solve
-    HenryPeriodic henry; //!< FFT filter object
+    HenryPencil henry; //!< FFT filter object
 };

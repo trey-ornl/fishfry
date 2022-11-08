@@ -1,11 +1,11 @@
-#include "HenryPeriodic.hpp"
+#include "HenryPencil.hpp"
 
 #include <algorithm>
 #include <cassert>
 #include <climits>
 #include <cmath>
 
-HenryPeriodic::HenryPeriodic(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]):
+HenryPencil::HenryPencil(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]):
   idi_(id[0]),
   idj_(id[1]),
   idk_(id[2]),
@@ -79,7 +79,7 @@ HenryPeriodic::HenryPeriodic(const int n[3], const double lo[3], const double hi
   CHECK(cufftPlanMany(&r2ck_,1,&nk_,&nk_,1,nk_,&nh_,1,nh_,CUFFT_D2Z,dip_*djq_));
 }
 
-HenryPeriodic::~HenryPeriodic()
+HenryPencil::~HenryPencil()
 {
   CHECK(cufftDestroy(r2ck_));
   CHECK(cufftDestroy(c2rk_));

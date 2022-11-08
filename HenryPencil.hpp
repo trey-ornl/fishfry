@@ -9,7 +9,7 @@
 /**
  * @brief Generic distributed-memory 3D FFT filter.
  */
-class HenryPeriodic {
+class HenryPencil {
   public:
 
     /**
@@ -21,9 +21,9 @@ class HenryPeriodic {
      * @param[in] m[3] { Number of MPI tasks in each dimension. }
      * @param[in] id[3] { Coordinates of this MPI task, starting at `{0,0,0}`. }
      */
-    HenryPeriodic(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]);
+    HenryPencil(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]);
 
-    ~HenryPeriodic();
+    ~HenryPencil();
 
     /**
      * @return { Number of bytes needed for array arguments for @ref filter. }
@@ -73,7 +73,7 @@ class HenryPeriodic {
 #if defined(__HIP__) || defined(__CUDACC__)
 
 template <typename F>
-void HenryPeriodic::filter(const size_t bytes, double *const before, double *const after, const F f, std::vector<TimeStamp> &stamps) const
+void HenryPencil::filter(const size_t bytes, double *const before, double *const after, const F f, std::vector<TimeStamp> &stamps) const
 {
   stamps.clear();
   stamps.push_back({"Total",MPI_Wtime()});

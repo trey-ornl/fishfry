@@ -1,10 +1,10 @@
-#include "ParisPeriodic.hpp"
+#include "ParisPencil.hpp"
 
 #include <cmath>
 
 __host__ __device__ static inline double sqr(const double x) { return x*x; }
 
-ParisPeriodic::ParisPeriodic(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]):
+ParisPencil::ParisPencil(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]):
   ni_(n[0]),
   nj_(n[1]),
 #ifdef PARIS_3PT
@@ -25,7 +25,7 @@ ParisPeriodic::ParisPeriodic(const int n[3], const double lo[3], const double hi
   henry(n,lo,hi,m,id)
 { }
 
-void ParisPeriodic::solve(const size_t bytes, double *const density, double *const potential, std::vector<TimeStamp> &stamps) const
+void ParisPencil::solve(const size_t bytes, double *const density, double *const potential, std::vector<TimeStamp> &stamps) const
 {
   // Local copies of members for lambda capture
   const int ni = ni_, nj = nj_;

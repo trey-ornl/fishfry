@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <memory>
 #include <mpi.h>
+#include <typeinfo>
 
 template <typename P>
 class FishFry
@@ -36,7 +37,7 @@ class FishFry
 
       MPI_Comm_rank(MPI_COMM_WORLD,&rank_);
       if (rank_ == 0) {
-        printf("FishFry: %dx%dx%d points over %dx%dx%d MPI processes\n",nPoints[0],nPoints[1],nPoints[2],nTasks[0],nTasks[1],nTasks[2]);
+        printf("FishFry<%s>: %dx%dx%d points over %dx%dx%d MPI processes\n",typeid(*poisson_).name(),nPoints[0],nPoints[1],nPoints[2],nTasks[0],nTasks[1],nTasks[2]);
         fflush(stdout);
       }
       const int id[] = { rank_/(nTasks[1]*nTasks[2]), (rank_/nTasks[2])%nTasks[1], rank_%nTasks[2] };
@@ -79,7 +80,6 @@ class FishFry
     void run(const int nIters)
     {
       std::vector<TimeStamp> totalStamps;
-
 
       for (int i = 0; i <= nIters; i++) {
         init<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,f_);
