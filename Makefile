@@ -7,9 +7,7 @@ default: $(EXE)
 $(EXE): $(OBJ)
 	$(LD) $(LDFLAGS) $(OBJ) -o $(EXE) $(LIBS)
 
-main.o: main.cpp FishFry.hpp gpu.hpp
-
-HenryPencil.o: HenryPencil.cpp HenryPencil.hpp gpu.hpp
+main.o: main.cpp FishFry.hpp gpu.hpp ParisPencil.hpp
 
 ParisPencil.o: ParisPencil.cpp ParisPencil.hpp gpu.hpp
 

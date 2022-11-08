@@ -1,6 +1,9 @@
 #pragma once
 
-#include "HenryPencil.hpp"
+#include <mpi.h>
+
+#include "gpu.hpp"
+#include "TimeStamp.hpp"
 
 /**
  * @brief Periodic Poisson solver using @ref Henry FFT filter.
@@ -19,10 +22,12 @@ class ParisPencil {
      */
     ParisPencil(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]);
 
+    ~ParisPencil();
+
     /**
      * @return { Number of bytes needed for array arguments for @ref solve. }
      */
-    size_t bytes() const { return henry.bytes(); }
+    size_t bytes() const { return bytes_; }
 
     /**
      * @detail { Solves the Poisson equation for the potential derived from the provided density.
@@ -39,10 +44,16 @@ class ParisPencil {
     void solve(size_t bytes, double *density, double *potential, std::vector<TimeStamp> &stamps) const;
 
   private:
-    int ni_,nj_; //!< Number of elements in X and Y dimensions
-#if defined(PARIS_3PT) || defined(PARIS_5PT)
-    int nk_; //!< Number of elements in Z dimension
-#endif
+    size_t bytes_; //!< Max bytes needed for argument arrays
+    cufftHandle c2ci_,c2cj_,c2rk_,r2ck_; //!< Objects for forward and inverse FFTs
+    MPI_Comm commI_,commJ_,commK_; //!< Communicators of fellow tasks in X, Y, and Z pencils
     double ddi_,ddj_,ddk_; //!< Frequency-independent terms in Poisson solve
-    HenryPencil henry; //!< FFT filter object
+    int dh_,di_,dj_,dk_; //!< Max number of local points in each dimension
+    int dhq_,dip_,djp_,djq_; //!< Max number of local points in dimensions of 2D decompositions
+    int idi_,idj_,idk_; //!< MPI coordinates of 3D block
+    int idp_,idq_; //!< X and Y task IDs within Z pencil
+    int mi_,mj_,mk_; //!< Number of MPI tasks in each dimension of 3D domain
+    int mp_,mq_; //!< Number of MPI tasks in X and Y dimensions of Z pencil
+    int nh_; //!< Global number of complex values in Z dimension, after R2C transform
+    int ni_,nj_,nk_; //!< Global number of real points in each dimension
 };
