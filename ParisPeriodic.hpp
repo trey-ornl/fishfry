@@ -36,7 +36,7 @@ class ParisPeriodic {
      * @param[out] potential { Output potential. Modified as a work array.
      *                         Must be at least @ref bytes() bytes, likely larger than the actual output field. }
      */
-    void solve(size_t bytes, double *density, double *potential) const;
+    void solve(size_t bytes, double *density, double *potential, std::vector<TimeStamp> &stamps) const;
 
   private:
     int ni_,nj_; //!< Number of elements in X and Y dimensions

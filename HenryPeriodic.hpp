@@ -4,6 +4,7 @@
 #include <mpi.h>
 
 #include "gpu.hpp"
+#include "TimeStamp.hpp"
 
 /**
  * @brief Generic distributed-memory 3D FFT filter.
@@ -50,9 +51,10 @@ class HenryPeriodic {
      *                Arguments `i`, `j`, and `k` are the frequency-space coordinates.
      *                Argument `before` is the input value at those indices, after the FFT.
      *                The function should return the filtered value. }
+     * @param[out] stamps { Vector of TimeStamps for phases of the FFTs and filter. }
      */
     template <typename F>
-    void filter(const size_t bytes, double *const before, double *const after, const F f) const;
+    void filter(const size_t bytes, double *const before, double *const after, const F f, std::vector<TimeStamp> &stamps) const;
 
   private:
     int idi_,idj_,idk_; //!< MPI coordinates of 3D block
@@ -66,16 +68,16 @@ class HenryPeriodic {
     int dhq_,dip_,djp_,djq_; //!< Max number of local points in dimensions of 2D decompositions
     size_t bytes_; //!< Max bytes needed for argument arrays
     cufftHandle c2ci_,c2cj_,c2rk_,r2ck_; //!< Objects for forward and inverse FFTs
-#ifndef MPI_GPU
-    double *ha_, *hb_; //!< Host copies for MPI messages
-#endif
 };
 
 #if defined(__HIP__) || defined(__CUDACC__)
 
 template <typename F>
-void HenryPeriodic::filter(const size_t bytes, double *const before, double *const after, const F f) const
+void HenryPeriodic::filter(const size_t bytes, double *const before, double *const after, const F f, std::vector<TimeStamp> &stamps) const
 {
+  stamps.clear();
+  stamps.push_back({"Total",MPI_Wtime()});
+
   // Make sure arguments have enough space
   assert(bytes >= bytes_);
 
@@ -116,14 +118,10 @@ void HenryPeriodic::filter(const size_t bytes, double *const before, double *con
   // Redistribute into Z pencils
 
   const int countK = dip*djq*dk;
-#ifndef MPI_GPU
-  CHECK(cudaMemcpy(ha_,a,bytes,cudaMemcpyDeviceToHost));
-  MPI_Alltoall(ha_,countK,MPI_DOUBLE,hb_,countK,MPI_DOUBLE,commK_);
-  CHECK(cudaMemcpy(b,hb_,bytes,cudaMemcpyHostToDevice));
-#else
   CHECK(cudaDeviceSynchronize());
+  stamps.push_back({"Reorder 3D block into sub-pencils",MPI_Wtime()});
   MPI_Alltoall(a,countK,MPI_DOUBLE,b,countK,MPI_DOUBLE,commK_);
-#endif
+  stamps.push_back({"Redistribute into Z pencils",MPI_Wtime()});
 
   // Make Z pencils contiguous in Z
   {
@@ -166,14 +164,10 @@ void HenryPeriodic::filter(const size_t bytes, double *const before, double *con
 
   // Redistribute for Y pencils
   const int countJ = 2*dip*djq*dhq;
-#ifndef MPI_GPU
-  CHECK(cudaMemcpy(ha_,a,bytes,cudaMemcpyDeviceToHost));
-  MPI_Alltoall(ha_,countJ,MPI_DOUBLE,hb_,countJ,MPI_DOUBLE,commJ_);
-  CHECK(cudaMemcpy(b,hb_,bytes,cudaMemcpyHostToDevice));
-#else
   CHECK(cudaDeviceSynchronize());
+  stamps.push_back({"Real-to-complex FFT in Z",MPI_Wtime()});
   MPI_Alltoall(a,countJ,MPI_DOUBLE,b,countJ,MPI_DOUBLE,commJ_);
-#endif
+  stamps.push_back({"Redistribute for Y pencils",MPI_Wtime()});
 
   // Make Y pencils contiguous in Y
   {
@@ -217,14 +211,10 @@ void HenryPeriodic::filter(const size_t bytes, double *const before, double *con
 
   // Redistribute for X pencils
   const int countI = 2*dip*djp*dhq;
-#ifndef MPI_GPU
-  CHECK(cudaMemcpy(ha_,a,bytes,cudaMemcpyDeviceToHost));
-  MPI_Alltoall(ha_,countI,MPI_DOUBLE,hb_,countI,MPI_DOUBLE,commI_);
-  CHECK(cudaMemcpy(b,hb_,bytes,cudaMemcpyHostToDevice));
-#else
   CHECK(cudaDeviceSynchronize());
+  stamps.push_back({"Forward FFT in Y",MPI_Wtime()});
   MPI_Alltoall(a,countI,MPI_DOUBLE,b,countI,MPI_DOUBLE,commI_);
-#endif
+  stamps.push_back({"Redistribute for X pencils",MPI_Wtime()});
 
   // Make X pencils contiguous in X
   {
@@ -287,14 +277,10 @@ void HenryPeriodic::filter(const size_t bytes, double *const before, double *con
   }
 
   // Redistribute for Y pencils
-#ifndef MPI_GPU
-  CHECK(cudaMemcpy(ha_,a,bytes,cudaMemcpyDeviceToHost));
-  MPI_Alltoall(ha_,countI,MPI_DOUBLE,hb_,countI,MPI_DOUBLE,commI_);
-  CHECK(cudaMemcpy(b,hb_,bytes,cudaMemcpyHostToDevice));
-#else
   CHECK(cudaDeviceSynchronize());
+  stamps.push_back({"X FFTs and filter",MPI_Wtime()});
   MPI_Alltoall(a,countI,MPI_DOUBLE,b,countI,MPI_DOUBLE,commI_);
-#endif
+  stamps.push_back({"Redistribute for Y pencils",MPI_Wtime()});
 
   // Make Y pencils contiguous in Y
   {
@@ -337,14 +323,10 @@ void HenryPeriodic::filter(const size_t bytes, double *const before, double *con
   }
 
   // Redistribute in Z pencils
-#ifndef MPI_GPU
-  CHECK(cudaMemcpy(ha_,a,bytes,cudaMemcpyDeviceToHost));
-  MPI_Alltoall(ha_,countJ,MPI_DOUBLE,hb_,countJ,MPI_DOUBLE,commJ_);
-  CHECK(cudaMemcpy(b,hb_,bytes,cudaMemcpyHostToDevice));
-#else
   CHECK(cudaDeviceSynchronize());
+  stamps.push_back({"Backward FFT in Y",MPI_Wtime()});
   MPI_Alltoall(a,countJ,MPI_DOUBLE,b,countJ,MPI_DOUBLE,commJ_);
-#endif
+  stamps.push_back({"Redistribute in Z pencils",MPI_Wtime()});
 
   // Make Z pencils contiguous in Z
   {
@@ -386,14 +368,10 @@ void HenryPeriodic::filter(const size_t bytes, double *const before, double *con
   }
 
   // Redistribute for 3D blocks
-#ifndef MPI_GPU
-  CHECK(cudaMemcpy(ha_,a,bytes,cudaMemcpyDeviceToHost));
-  MPI_Alltoall(ha_,countK,MPI_DOUBLE,hb_,countK,MPI_DOUBLE,commK_);
-  CHECK(cudaMemcpy(b,hb_,bytes,cudaMemcpyHostToDevice));
-#else
   CHECK(cudaDeviceSynchronize());
+  stamps.push_back({"Complex-to-real FFT in Z",MPI_Wtime()});
   MPI_Alltoall(a,countK,MPI_DOUBLE,b,countK,MPI_DOUBLE,commK_);
-#endif
+  stamps.push_back({"Redistribute for 3D blocks",MPI_Wtime()});
 
   // Rearrange into 3D blocks and apply FFT normalization
   {
@@ -412,6 +390,8 @@ void HenryPeriodic::filter(const size_t bytes, double *const before, double *con
         }
       });
   }
+  CHECK(cudaDeviceSynchronize());
+  stamps.push_back({"Rearrange into 3D blocks and normalize",MPI_Wtime()});
 }
 
 #endif

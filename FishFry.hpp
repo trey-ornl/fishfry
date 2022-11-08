@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gpu.hpp"
+#include "TimeStamp.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -34,6 +35,10 @@ class FishFry
       assert(size == nTasks[0]*nTasks[1]*nTasks[2]);
 
       MPI_Comm_rank(MPI_COMM_WORLD,&rank_);
+      if (rank_ == 0) {
+        printf("FishFry: %dx%dx%d points over %dx%dx%d MPI processes\n",nPoints[0],nPoints[1],nPoints[2],nTasks[0],nTasks[1],nTasks[2]);
+        fflush(stdout);
+      }
       const int id[] = { rank_/(nTasks[1]*nTasks[2]), (rank_/nTasks[2])%nTasks[1], rank_%nTasks[2] };
       const double lo[] = { -M_PI, -M_PI, -M_PI };
       const double hi[] = { M_PI-dx_, M_PI-dy_, M_PI-dz_ };
@@ -73,19 +78,24 @@ class FishFry
 
     void run(const int nIters)
     {
-      double totalTime = 0.0;
-      for (int i = 0; i < nIters; i++) {
+      std::vector<TimeStamp> totalStamps;
+
+
+      for (int i = 0; i <= nIters; i++) {
         init<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,f_);
         CHECK(hipGetLastError());
         CHECK(hipDeviceSynchronize());
         MPI_Barrier(MPI_COMM_WORLD);
 
-        const double before = MPI_Wtime();
-        poisson_->solve(bytes_,f_,phi_);
-        CHECK(hipDeviceSynchronize());
-        const double after = MPI_Wtime();
-        const double time = after-before;
-        totalTime += time;
+        std::vector<TimeStamp> stamps;
+        poisson_->solve(bytes_,f_,phi_,stamps);
+        const double time = stamps.back().second-stamps.front().second;
+        if (i == 0) {
+          totalStamps = stamps;
+          for (unsigned j = 0; j < stamps.size(); j++) totalStamps.at(j).second = 0;
+        } else {
+          for (unsigned j = 0; j < stamps.size(); j++) totalStamps.at(j).second += stamps.at(j).second;
+        }
 
         CHECK(hipMemsetAsync(diffs_,0,3*sizeof(double),0));
         diff<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,phi_,diffs_);
@@ -96,16 +106,37 @@ class FishFry
         MPI_Reduce(diffs_,allDiffs,2,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
         MPI_Reduce(diffs_+2,allDiffs+2,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
         if (rank_ == 0) {
-          printf("%d: Time %g Rate %g L_1 %g L_2 %g L_\\inf %g\n",i,time,totalPoints_/time,allDiffs[0]*scales_[0],sqrt(allDiffs[1]*scales_[1]),allDiffs[2]*scales_[2]);
+          printf("%d: Time %10.4e Rate %10.4e L_1 %10.4e L_2 %10.4e L_\\inf %10.4e",i,time,totalPoints_/time,allDiffs[0]*scales_[0],sqrt(allDiffs[1]*scales_[1]),allDiffs[2]*scales_[2]);
+          if (i == 0) printf(" (warmup, ignored)");
+          printf("\n");
           fflush(stdout);
         }
       }
-      double maxTotalTime = 0.0;
-      MPI_Reduce(&totalTime,&maxTotalTime,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
+
       if (rank_ == 0) {
-        printf("Avg: Time(s) %g Rate(points/sec) %g\n",maxTotalTime/double(nIters),nIters*totalPoints_/maxTotalTime);
-        fflush(stdout);
+        printf("\nTimes Averaged across Iterations\n");
+        printf("Min Rank   | Avg Rank   | Max Rank   (%%Total) | Phase\n");
+        printf("--------------------------------------------------------\n");
       }
+
+      int size = 0;
+      MPI_Comm_size(MPI_COMM_WORLD,&size);
+      const double perSize = 1.0/double(size);
+
+      const double perIter = 1.0/double(nIters);
+      double percent, t, tMax, tMin, tSum;
+      for (unsigned i = 0; i < totalStamps.size(); i++) {
+        const double dt = (i == 0) ? totalStamps.back().second-totalStamps.front().second : totalStamps[i].second-totalStamps[i-1].second;
+        t = perIter*dt;
+        MPI_Reduce(&t,&tMax,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
+        MPI_Reduce(&t,&tMin,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
+        MPI_Reduce(&t,&tSum,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+        if (i == 0) percent = 100.0/tMax;
+        if (rank_ == 0) {
+          printf("%10.4e | %10.4e | %10.4e (%5.1f%%) | %s\n",tMin,tSum*perSize,tMax,tMax*percent,totalStamps[i].first.c_str());
+        }
+      }
+      if (rank_ == 0) fflush(stdout);
     }
 
   protected:

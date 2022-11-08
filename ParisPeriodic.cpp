@@ -25,7 +25,7 @@ ParisPeriodic::ParisPeriodic(const int n[3], const double lo[3], const double hi
   henry(n,lo,hi,m,id)
 { }
 
-void ParisPeriodic::solve(const size_t bytes, double *const density, double *const potential) const
+void ParisPeriodic::solve(const size_t bytes, double *const density, double *const potential, std::vector<TimeStamp> &stamps) const
 {
   // Local copies of members for lambda capture
   const int ni = ni_, nj = nj_;
@@ -69,5 +69,5 @@ void ParisPeriodic::solve(const size_t bytes, double *const density, double *con
       } else {
         return cufftDoubleComplex{0.0,0.0};
       }
-    });
+    },stamps);
 }
