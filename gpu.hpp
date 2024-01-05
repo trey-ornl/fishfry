@@ -7,7 +7,7 @@
 #ifdef O_HIP
 
 #include <hip/hip_runtime.h>
-#include <hipfft.h>
+#include <hipfft/hipfft.h>
 
 #ifdef __HIPCC__
 #define __CUDACC__

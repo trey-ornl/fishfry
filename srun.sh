@@ -11,4 +11,5 @@ export MPICH_VERSION_DISPLAY=1
 TPN=8
 TASKS=$(( $1 * $2 * $3 ))
 NODES=$(( ( TASKS + TPN - 1 ) / TPN ))
+ldd ./fishfry
 srun -u -n ${TASKS} -N ${NODES} --gpus-per-node=8 --gpu-bind=closest --exclusive -t 5:00 ./fishfry $1 $2 $3 $4 $5 $6 $7
