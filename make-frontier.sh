@@ -1,5 +1,6 @@
 #!/bin/bash
-module load rocm
+module load cpe/23.12
+module load rocm/5.7.1
 module load craype-accel-amd-gfx90a
 module list
 set -x

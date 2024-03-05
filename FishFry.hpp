@@ -11,6 +11,95 @@
 #include <mpi.h>
 #include <typeinfo>
 
+__global__ static void init(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const f)
+{
+  const int i = threadIdx.z+blockDim.z*blockIdx.z;
+  const int j = threadIdx.y+blockDim.y*blockIdx.y;
+  const int k = threadIdx.x+blockDim.x*blockIdx.x;
+
+  if ((i >= ni) || (j >= nj) || (k >= nk)) return;
+
+  const double x = xLo+i*dx;
+  const double cx = cos(x);
+  const double sx = sin(x);
+  const double ex = exp(sx);
+  const double px = cx*ex;
+  const double dpx = -ex*sx*cx*(sx+3.0);
+
+  const double y = yLo+j*dy;
+  const double cy = cos(y);
+  const double sy = sin(y);
+  const double ey = exp(cy);
+  const double py = sy*ey;
+  const double dpy = sy*ey*(sy*sy-3.0*cy-1.0);
+
+  const double z = zLo+k*dz;
+  const double cz = cos(z);
+  const double sz = sin(z);
+  const double ez = exp(cz);
+  const double pz = cz*ez;
+  const double dpz = ez*(3.0*sz*sz-cz*cz*cz-1.0);
+
+  const int ijk = (i*nj+j)*nk+k;
+  f[ijk] = px*py*dpz+px*dpy*pz+dpx*py*pz;
+}
+
+#ifndef __HIPCC__
+__device__ static double atomicMax(double *const address, const double val)
+{
+  double result = 0;
+  unsigned long long *p = reinterpret_cast<unsigned long long *>(&result);
+  *p = ::atomicMax(reinterpret_cast<unsigned long long *>(address),*reinterpret_cast<const unsigned long long *>(&val));
+  return result;
+}
+#endif
+
+__global__ static void diff(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, const double *const phi, double *const diffs)
+{
+  __shared__ double shared[3];
+
+  const bool root = ((threadIdx.x == 0) && (threadIdx.y == 0) && (threadIdx.z == 0));
+  if (root) shared[0] = shared[1] = shared[2] = 0.0;
+  __syncthreads();
+
+  const int i = threadIdx.z+blockDim.z*blockIdx.z;
+  const int j = threadIdx.y+blockDim.y*blockIdx.y;
+  const int k = threadIdx.x+blockDim.x*blockIdx.x;
+
+  if ((i < ni) && (j < nj) && (k < nk)) {
+
+    const double x = xLo+i*dx;
+    const double cx = cos(x);
+    const double sx = sin(x);
+    const double ex = exp(sx);
+    const double px = cx*ex;
+
+    const double y = yLo+j*dy;
+    const double cy = cos(y);
+    const double sy = sin(y);
+    const double ey = exp(cy);
+    const double py = sy*ey;
+
+    const double z = zLo+k*dz;
+    const double cz = cos(z);
+    const double ez = exp(cz);
+    const double pz = cz*ez;
+
+    const int ijk = (i*nj+j)*nk+k;
+    const double dPhi = fabs(px*py*pz-phi[ijk]);
+
+    atomicAdd(&shared[0],dPhi);
+    atomicAdd(shared+1,dPhi*dPhi);
+    atomicMax(shared+2,dPhi);
+  }
+  __syncthreads();
+  if (root) {
+    atomicAdd(diffs,shared[0]);
+    atomicAdd(diffs+1,shared[1]);
+    atomicMax(diffs+2,shared[2]);
+  }
+}
+
 template <typename P>
 class FishFry
 {
@@ -50,15 +139,15 @@ class FishFry
       zLo_ = lo[2]+id[2]*nk_*dz_;
 
       bytes_ = std::max(poisson_->bytes(),ni_*nj_*nk_*sizeof(double));
-      CHECK(hipMalloc(&f_,bytes_));
-      CHECK(hipMalloc(&phi_,bytes_));
-      CHECK(hipMalloc(&diffs_,3*sizeof(double)));
+      CHECK(cudaMalloc(&f_,bytes_));
+      CHECK(cudaMalloc(&phi_,bytes_));
+      CHECK(cudaMalloc(&diffs_,3*sizeof(double)));
 
-      CHECK(hipMemsetAsync(diffs_,0,3*sizeof(double),0));
-      CHECK(hipMemsetAsync(phi_,0,bytes_));
+      CHECK(cudaMemsetAsync(diffs_,0,3*sizeof(double),0));
+      CHECK(cudaMemsetAsync(phi_,0,bytes_));
       diff<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,phi_,diffs_);
-      CHECK(hipGetLastError());
-      CHECK(hipDeviceSynchronize());
+      CHECK(cudaGetLastError());
+      CHECK(cudaDeviceSynchronize());
 
       double allDiffs[3];
       MPI_Reduce(diffs_,allDiffs,2,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
@@ -72,9 +161,9 @@ class FishFry
 
     ~FishFry()
     {
-      CHECK(hipFree(diffs_));
-      CHECK(hipFree(phi_));
-      CHECK(hipFree(f_));
+      CHECK(cudaFree(diffs_));
+      CHECK(cudaFree(phi_));
+      CHECK(cudaFree(f_));
     }
 
     void run(const int nIters)
@@ -83,8 +172,8 @@ class FishFry
 
       for (int i = 0; i <= nIters; i++) {
         init<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,f_);
-        CHECK(hipGetLastError());
-        CHECK(hipDeviceSynchronize());
+        CHECK(cudaGetLastError());
+        CHECK(cudaDeviceSynchronize());
         MPI_Barrier(MPI_COMM_WORLD);
 
         std::vector<TimeStamp> stamps;
@@ -97,10 +186,10 @@ class FishFry
           for (unsigned j = 0; j < stamps.size(); j++) totalStamps.at(j).second += stamps.at(j).second;
         }
 
-        CHECK(hipMemsetAsync(diffs_,0,3*sizeof(double),0));
+        CHECK(cudaMemsetAsync(diffs_,0,3*sizeof(double),0));
         diff<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,phi_,diffs_);
-        CHECK(hipGetLastError());
-        CHECK(hipDeviceSynchronize());
+        CHECK(cudaGetLastError());
+        CHECK(cudaDeviceSynchronize());
 
         double allDiffs[3];
         MPI_Reduce(diffs_,allDiffs,2,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
@@ -153,92 +242,5 @@ class FishFry
     double *phi_;
     double *diffs_;
     double scales_[3];
-
-    __global__ static void init(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const f)
-    {
-      const int i = threadIdx.z+blockDim.z*blockIdx.z;
-      const int j = threadIdx.y+blockDim.y*blockIdx.y;
-      const int k = threadIdx.x+blockDim.x*blockIdx.x;
-
-      if ((i >= ni) || (j >= nj) || (k >= nk)) return;
-
-      const double x = xLo+i*dx;
-      const double cx = cos(x);
-      const double sx = sin(x);
-      const double ex = exp(sx);
-      const double px = cx*ex;
-      const double dpx = -ex*sx*cx*(sx+3.0);
-
-      const double y = yLo+j*dy;
-      const double cy = cos(y);
-      const double sy = sin(y);
-      const double ey = exp(cy);
-      const double py = sy*ey;
-      const double dpy = sy*ey*(sy*sy-3.0*cy-1.0);
-
-      const double z = zLo+k*dz;
-      const double cz = cos(z);
-      const double sz = sin(z);
-      const double ez = exp(cz);
-      const double pz = cz*ez;
-      const double dpz = ez*(3.0*sz*sz-cz*cz*cz-1.0);
-
-      const int ijk = (i*nj+j)*nk+k;
-      f[ijk] = px*py*dpz+px*dpy*pz+dpx*py*pz;
-    }
-
-    __device__ static double atomicMax(double *const address, const double val)
-    {
-      double result = 0;
-      unsigned long long *p = reinterpret_cast<unsigned long long *>(&result);
-      *p = ::atomicMax(reinterpret_cast<unsigned long long *>(address),*reinterpret_cast<const unsigned long long *>(&val));
-      return result;
-    }
-
-    __global__ static void diff(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, const double *const phi, double *const diffs)
-    {
-      __shared__ double shared[3];
-
-      const bool root = ((threadIdx.x == 0) && (threadIdx.y == 0) && (threadIdx.z == 0));
-      if (root) shared[0] = shared[1] = shared[2] = 0.0;
-      __syncthreads();
-
-      const int i = threadIdx.z+blockDim.z*blockIdx.z;
-      const int j = threadIdx.y+blockDim.y*blockIdx.y;
-      const int k = threadIdx.x+blockDim.x*blockIdx.x;
-
-      if ((i < ni) && (j < nj) && (k < nk)) {
-
-        const double x = xLo+i*dx;
-        const double cx = cos(x);
-        const double sx = sin(x);
-        const double ex = exp(sx);
-        const double px = cx*ex;
-
-        const double y = yLo+j*dy;
-        const double cy = cos(y);
-        const double sy = sin(y);
-        const double ey = exp(cy);
-        const double py = sy*ey;
-
-        const double z = zLo+k*dz;
-        const double cz = cos(z);
-        const double ez = exp(cz);
-        const double pz = cz*ez;
-
-        const int ijk = (i*nj+j)*nk+k;
-        const double dPhi = fabs(px*py*pz-phi[ijk]);
-
-        atomicAdd(shared,dPhi);
-        atomicAdd(shared+1,dPhi*dPhi);
-        atomicMax(shared+2,dPhi);
-      }
-      __syncthreads();
-      if (root) {
-        atomicAdd(diffs,shared[0]);
-        atomicAdd(diffs+1,shared[1]);
-        atomicMax(diffs+2,shared[2]);
-      }
-    }
 
 };

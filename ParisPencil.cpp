@@ -277,7 +277,7 @@ void ParisPencil::solve(const size_t bytes, double *const density, double *const
           const double j2 = sqr(double(min(j,nj-j))*ddj);
           const double k2 = sqr(double(k)*ddk);
           const double d = -1.0/(i2+j2+k2);
-          ac[iab] = d*bc[iab];
+          ac[iab] = cufftDoubleComplex{d*bc[iab].x,d*bc[iab].y};
         } else {
           ac[iab] = {0,0};
         }

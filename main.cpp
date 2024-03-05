@@ -31,13 +31,13 @@ int main(int argc, char **argv)
     int lrank = MPI_PROC_NULL;
     MPI_Comm_rank(local,&lrank);
     int nd = 0;
-    CHECK(hipGetDeviceCount(&nd));
+    CHECK(cudaGetDeviceCount(&nd));
     assert(nd > 0);
     if (nd > 1) {
       const int target = lrank%nd;
-      CHECK(hipSetDevice(target));
+      CHECK(cudaSetDevice(target));
       int myd = -1;
-      CHECK(hipGetDevice(&myd));
+      CHECK(cudaGetDevice(&myd));
       MPI_Barrier(MPI_COMM_WORLD);
       printf("# Task %d with node rank %d using device %d (%d devices per node)\n",rank,lrank,myd,nd);
       fflush(stdout);

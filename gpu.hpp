@@ -40,6 +40,7 @@
 #define cudaMemcpyAsync hipMemcpyAsync
 #define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaMemsetAsync hipMemsetAsync
 #define cudaSetDevice hipSetDevice
 
 static void __attribute__((unused)) check(const hipfftResult err, const char *const file, const int line)
@@ -85,7 +86,7 @@ static void check(const cudaError_t err, const char *const file, const int line)
 
 #define CHECK(X) check(X,__FILE__,__LINE__)
 
-#if defined(__CUDACC__) || defined(__HIPCC__)
+#if defined(__CUDACC__) || defined(__HIPCC__) 
 
 static constexpr int GPU_MAX_THREADS = 64;
 
@@ -379,3 +380,5 @@ void gpuFor(const int n0, const int n1, const int n2, const int n3, const int n4
 #define GPU_LAMBDA [=] __device__
 
 #endif
+
+
