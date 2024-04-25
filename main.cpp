@@ -1,4 +1,5 @@
 #include "FishFry.hpp"
+#include "Jawfish.hpp"
 #include "ParisPencil.hpp"
 
 int main(int argc, char **argv)
@@ -45,7 +46,8 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
-  FishFry<ParisPencil>(nTasks,nPoints).run(nIters);
+  //FishFry<ParisPencil>(nTasks,nPoints).run(nIters);
+  FishFry<Jawfish>(nTasks,nPoints);//.run(nIters);
   MPI_Finalize();
   return 0;
 }

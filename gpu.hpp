@@ -7,11 +7,40 @@
 #ifdef O_HIP
 
 #include <hip/hip_runtime.h>
+#include <hipblas/hipblas.h>
 #include <hipfft/hipfft.h>
 
 #ifdef __HIPCC__
 #define __CUDACC__
 #endif
+
+#define CUBLAS_OP_N HIPBLAS_OP_N
+
+#define cublasCreate hipblasCreate
+#define cublasDestroy hipblasDestroy
+#define cublasDgels hipblasDgels
+#define cublasDgemv hipblasDgemv
+#define cublasDscal hipblasDscal
+#define cublasHandle_t hipblasHandle_t
+#define cublasIdamax hipblasIdamax
+
+#define cudaDeviceSynchronize hipDeviceSynchronize
+#define cudaFree hipFree
+#define cudaFreeHost hipHostFree
+#define cudaGetDevice hipGetDevice
+#define cudaGetDeviceCount hipGetDeviceCount
+#define cudaGetLastError hipGetLastError
+#define cudaHostAlloc hipHostMalloc
+#define cudaHostAllocDefault hipHostMallocDefault
+#define cudaMalloc hipMalloc
+#define cudaMemcpy hipMemcpy
+#define cudaMemcpyAsync hipMemcpyAsync
+#define cudaMemcpyDeviceToDevice hipMemcpyDeviceToDevice
+#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
+#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaMemset hipMemset
+#define cudaMemsetAsync hipMemsetAsync
+#define cudaSetDevice hipSetDevice
 
 #define CUFFT_D2Z HIPFFT_D2Z
 #define CUFFT_FORWARD HIPFFT_FORWARD
@@ -27,26 +56,18 @@
 #define cufftHandle hipfftHandle
 #define cufftPlanMany hipfftPlanMany
 
-#define cudaDeviceSynchronize hipDeviceSynchronize
-#define cudaFree hipFree
-#define cudaFreeHost hipHostFree
-#define cudaGetDevice hipGetDevice
-#define cudaGetDeviceCount hipGetDeviceCount
-#define cudaGetLastError hipGetLastError
-#define cudaHostAlloc hipHostMalloc
-#define cudaHostAllocDefault hipHostMallocDefault
-#define cudaMalloc hipMalloc
-#define cudaMemcpy hipMemcpy
-#define cudaMemcpyAsync hipMemcpyAsync
-#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
-#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
-#define cudaMemsetAsync hipMemsetAsync
-#define cudaSetDevice hipSetDevice
-
 static void __attribute__((unused)) check(const hipfftResult err, const char *const file, const int line)
 {
   if (err == HIPFFT_SUCCESS) return;
   fprintf(stderr,"HIPFFT ERROR AT LINE %d OF FILE '%s': %d\n",line,file,err);
+  fflush(stderr);
+  exit(err);
+}
+
+static void __attribute__((unused)) check(const hipblasStatus_t err, const char *const file, const int line)
+{
+  if (err == HIPBLAS_STATUS_SUCCESS) return;
+  fprintf(stderr,"HIPBLAS ERROR AT LINE %d OF FILE '%s': %s\n",line,file,hipblasStatusToString(err));
   fflush(stderr);
   exit(err);
 }
@@ -61,6 +82,7 @@ static void __attribute__((unused)) check(const hipError_t err, const char *cons
 
 #else
 
+#include <cublas.h>
 #include <cufft.h>
 #include <cuda_runtime.h>
 

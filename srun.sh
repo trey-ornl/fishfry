@@ -1,8 +1,5 @@
 #!/bin/bash
-module load cpe/23.12
-module load rocm/5.7.1
-module load craype-accel-amd-gfx90a
-module -t list
+source ./modules-frontier
 export LD_LIBRARY_PATH="${CRAY_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}"
 set -x
 export ROCFFT_RTC_CACHE_PATH=/dev/null

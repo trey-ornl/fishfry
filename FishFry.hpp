@@ -11,6 +11,16 @@
 #include <mpi.h>
 #include <typeinfo>
 
+__device__ static inline double f(const double a, const double x)
+{
+  return a*sin(x)*exp(a*a*(cos(x)-1.0));
+}
+
+__device__ static inline double initPhi(const double x, const double y, const double z)
+{
+  return f(1.0,x+0.9)+f(1.0,y+0.99)+f(1.0,z+1.1)-f(10.0,x-1.2)-f(10.0,y-1.1)-f(10.0,z-1.01);
+}
+
 __device__ static inline double ddf(const double a, const double x)
 {
   const double c = cos(x);
@@ -25,17 +35,7 @@ __device__ static inline double initRho(const double x, const double y, const do
   return ddf(1.0,x+0.9)+ddf(1.0,y+0.99)+ddf(1.0,z+1.1)-ddf(10.0,x-1.2)-ddf(10.0,y-1.1)-ddf(10.0,z-1.01);
 }
 
-__device__ static inline double f(const double a, const double x)
-{
-  return a*sin(x)*exp(a*a*(cos(x)-1.0));
-}
-
-__device__ static inline double initPhi(const double x, const double y, const double z)
-{
-  return f(1.0,x+0.9)+f(1.0,y+0.99)+f(1.0,z+1.1)-f(10.0,x-1.2)-f(10.0,y-1.1)-f(10.0,z-1.01);
-}
-
-__global__ static void initRho(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const rho)
+__global__ __attribute((unused)) static void init(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const rho)
 {
   const int i = threadIdx.z+blockDim.z*blockIdx.z;
   const int j = threadIdx.y+blockDim.y*blockIdx.y;
@@ -60,7 +60,7 @@ __global__ static void initRho(const int ni, const int nj, const int nk, const d
 }
 
 #ifndef __HIPCC__
-__device__ static double atomicMax(double *const address, const double val)
+__device__ static inline double atomicMax(double *const address, const double val)
 {
   double result = 0;
   unsigned long long *p = reinterpret_cast<unsigned long long *>(&result);
@@ -177,7 +177,7 @@ class FishFry
       std::vector<TimeStamp> totalStamps;
 
       for (int i = 0; i <= nIters; i++) {
-        ::initRho<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,f_);
+        ::init<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,f_);
         CHECK(cudaGetLastError());
         CHECK(cudaDeviceSynchronize());
         MPI_Barrier(MPI_COMM_WORLD);
