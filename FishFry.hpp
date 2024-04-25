@@ -11,7 +11,31 @@
 #include <mpi.h>
 #include <typeinfo>
 
-__global__ static void init(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const f)
+__device__ static inline double ddf(const double a, const double x)
+{
+  const double c = cos(x);
+  const double s = sin(x);
+  const double a2 = a*a;
+  const double a4 = a2*a2;
+  return a*exp(a2*(c-1.0))*s*(a4*s*s-3.0*a2*c-1.0);
+}
+
+__device__ static inline double initRho(const double x, const double y, const double z)
+{
+  return ddf(1.0,x+0.9)+ddf(1.0,y+0.99)+ddf(1.0,z+1.1)-ddf(10.0,x-1.2)-ddf(10.0,y-1.1)-ddf(10.0,z-1.01);
+}
+
+__device__ static inline double f(const double a, const double x)
+{
+  return a*sin(x)*exp(a*a*(cos(x)-1.0));
+}
+
+__device__ static inline double initPhi(const double x, const double y, const double z)
+{
+  return f(1.0,x+0.9)+f(1.0,y+0.99)+f(1.0,z+1.1)-f(10.0,x-1.2)-f(10.0,y-1.1)-f(10.0,z-1.01);
+}
+
+__global__ static void initRho(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const rho)
 {
   const int i = threadIdx.z+blockDim.z*blockIdx.z;
   const int j = threadIdx.y+blockDim.y*blockIdx.y;
@@ -20,28 +44,11 @@ __global__ static void init(const int ni, const int nj, const int nk, const doub
   if ((i >= ni) || (j >= nj) || (k >= nk)) return;
 
   const double x = xLo+i*dx;
-  const double cx = cos(x);
-  const double sx = sin(x);
-  const double ex = exp(sx);
-  const double px = cx*ex;
-  const double dpx = -ex*sx*cx*(sx+3.0);
-
   const double y = yLo+j*dy;
-  const double cy = cos(y);
-  const double sy = sin(y);
-  const double ey = exp(cy);
-  const double py = sy*ey;
-  const double dpy = sy*ey*(sy*sy-3.0*cy-1.0);
-
   const double z = zLo+k*dz;
-  const double cz = cos(z);
-  const double sz = sin(z);
-  const double ez = exp(cz);
-  const double pz = cz*ez;
-  const double dpz = ez*(3.0*sz*sz-cz*cz*cz-1.0);
 
   const int ijk = (i*nj+j)*nk+k;
-  f[ijk] = px*py*dpz+px*dpy*pz+dpx*py*pz;
+  rho[ijk] = initRho(x,y,z);
 }
 
 #ifndef __HIPCC__
@@ -69,24 +76,10 @@ __global__ static void diff(const int ni, const int nj, const int nk, const doub
   if ((i < ni) && (j < nj) && (k < nk)) {
 
     const double x = xLo+i*dx;
-    const double cx = cos(x);
-    const double sx = sin(x);
-    const double ex = exp(sx);
-    const double px = cx*ex;
-
     const double y = yLo+j*dy;
-    const double cy = cos(y);
-    const double sy = sin(y);
-    const double ey = exp(cy);
-    const double py = sy*ey;
-
     const double z = zLo+k*dz;
-    const double cz = cos(z);
-    const double ez = exp(cz);
-    const double pz = cz*ez;
-
     const int ijk = (i*nj+j)*nk+k;
-    const double dPhi = fabs(px*py*pz-phi[ijk]);
+    const double dPhi = fabs(initPhi(x,y,z)-phi[ijk]);
 
     atomicAdd(&shared[0],dPhi);
     atomicAdd(shared+1,dPhi*dPhi);
@@ -171,7 +164,7 @@ class FishFry
       std::vector<TimeStamp> totalStamps;
 
       for (int i = 0; i <= nIters; i++) {
-        init<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,f_);
+        ::initRho<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,f_);
         CHECK(cudaGetLastError());
         CHECK(cudaDeviceSynchronize());
         MPI_Barrier(MPI_COMM_WORLD);
@@ -187,7 +180,7 @@ class FishFry
         }
 
         CHECK(cudaMemsetAsync(diffs_,0,3*sizeof(double),0));
-        diff<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,phi_,diffs_);
+        ::diff<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,phi_,diffs_);
         CHECK(cudaGetLastError());
         CHECK(cudaDeviceSynchronize());
 
