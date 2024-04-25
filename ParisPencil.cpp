@@ -6,9 +6,15 @@ __host__ __device__ static inline double sqr(const double x) { return x*x; }
 
 ParisPencil::ParisPencil(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]):
   bytes_(0),
+#ifdef STENCIL_7PT
+  ddi_{2.0*double(n[0]-1)/(hi[0]-lo[0])},
+  ddj_{2.0*double(n[1]-1)/(hi[1]-lo[1])},
+  ddk_{2.0*double(n[2]-1)/(hi[2]-lo[2])},
+#else
   ddi_{2.0*M_PI*double(n[0]-1)/(double(n[0])*(hi[0]-lo[0]))},
   ddj_{2.0*M_PI*double(n[1]-1)/(double(n[1])*(hi[1]-lo[1]))},
   ddk_{2.0*M_PI*double(n[2]-1)/(double(n[2])*(hi[2]-lo[2]))},
+#endif
   idi_(id[0]),
   idj_(id[1]),
   idk_(id[2]),
@@ -115,6 +121,14 @@ void ParisPencil::solve(const size_t bytes, double *const density, double *const
   const int mi = mi_, mj = mj_, mk = mk_;
   const int mp = mp_, mq = mq_;
   const int nh = nh_, ni = ni_, nj = nj_, nk = nk_;
+
+#ifdef STENCIL_7PT
+  // Extra values needed for stencil Laplacians
+  
+  const double si = M_PI/double(ni);
+  const double sj = M_PI/double(nj);
+  const double sk = M_PI/double(nk);
+#endif
 
   // Indices and sizes for pencil redistributions
 
@@ -273,9 +287,15 @@ void ParisPencil::solve(const size_t bytes, double *const density, double *const
         const int k = kLo+k0;
         const int iab = i+ni*(k0+dhq*j0);
         if (i || j || k) {
+#ifdef STENCIL_7PT
+          const double i2 = sqr(sin(double(min(i,ni-i))*si)*ddi);
+          const double j2 = sqr(sin(double(min(j,nj-j))*sj)*ddj);
+          const double k2 = sqr(sin(double(k)*sk)*ddk);
+#else
           const double i2 = sqr(double(min(i,ni-i))*ddi);
           const double j2 = sqr(double(min(j,nj-j))*ddj);
           const double k2 = sqr(double(k)*ddk);
+#endif
           const double d = -1.0/(i2+j2+k2);
           ac[iab] = cufftDoubleComplex{d*bc[iab].x,d*bc[iab].y};
         } else {

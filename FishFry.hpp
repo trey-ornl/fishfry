@@ -48,7 +48,15 @@ __global__ static void initRho(const int ni, const int nj, const int nk, const d
   const double z = zLo+k*dz;
 
   const int ijk = (i*nj+j)*nk+k;
+#ifdef STENCIL_7PT
+  const double phi = initPhi(x,y,z);
+  const double ddx = (initPhi(x-dx,y,z)+initPhi(x+dx,y,z)-2.0*phi)/(dx*dx);
+  const double ddy = (initPhi(x,y-dy,z)+initPhi(x,y+dy,z)-2.0*phi)/(dy*dy);
+  const double ddz = (initPhi(x,y,z-dz)+initPhi(x,y,z+dz)-2.0*phi)/(dz*dz);
+  rho[ijk] = ddx+ddy+ddz;
+#else
   rho[ijk] = initRho(x,y,z);
+#endif
 }
 
 #ifndef __HIPCC__
@@ -119,7 +127,12 @@ class FishFry
 
       MPI_Comm_rank(MPI_COMM_WORLD,&rank_);
       if (rank_ == 0) {
-        printf("FishFry<%s>: %dx%dx%d points over %dx%dx%d MPI processes\n",typeid(*poisson_).name(),nPoints[0],nPoints[1],nPoints[2],nTasks[0],nTasks[1],nTasks[2]);
+        printf("FishFry<%s>: %dx%dx%d points over %dx%dx%d MPI processes",typeid(*poisson_).name(),nPoints[0],nPoints[1],nPoints[2],nTasks[0],nTasks[1],nTasks[2]);
+#ifdef STENCIL_7PT
+        printf(", 7-point Laplacian\n");
+#else
+        printf(", spectral Laplacian\n");
+#endif
         fflush(stdout);
       }
       const int id[] = { rank_/(nTasks[1]*nTasks[2]), (rank_/nTasks[2])%nTasks[1], rank_%nTasks[2] };
