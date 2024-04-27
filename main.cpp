@@ -47,7 +47,7 @@ int main(int argc, char **argv)
   }
 
   //FishFry<ParisPencil>(nTasks,nPoints).run(nIters);
-  FishFry<Jawfish>(nTasks,nPoints);//.run(nIters);
+  FishFry<Jawfish>(nTasks,nPoints).run(nIters);
   MPI_Finalize();
   return 0;
 }

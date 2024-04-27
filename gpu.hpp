@@ -15,16 +15,25 @@
 #endif
 
 #define CUBLAS_OP_N HIPBLAS_OP_N
+#define CUBLAS_POINTER_MODE_HOST HIPBLAS_POINTER_MODE_HOST
 
 #define cublasCreate hipblasCreate
+#define cublasDasum hipblasDasum
+#define cublasDaxpy hipblasDaxpy
 #define cublasDestroy hipblasDestroy
 #define cublasDgels hipblasDgels
 #define cublasDgemv hipblasDgemv
 #define cublasDscal hipblasDscal
 #define cublasHandle_t hipblasHandle_t
 #define cublasIdamax hipblasIdamax
+#define cublasSetPointerMode hipblasSetPointerMode
 
 #define cudaDeviceSynchronize hipDeviceSynchronize
+#define cudaEvent_t hipEvent_t
+#define cudaEventCreate hipEventCreate
+#define cudaEventDestroy hipEventDestroy
+#define cudaEventRecord hipEventRecord
+#define cudaEventSynchronize hipEventSynchronize
 #define cudaFree hipFree
 #define cudaFreeHost hipHostFree
 #define cudaGetDevice hipGetDevice

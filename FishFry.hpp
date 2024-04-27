@@ -21,6 +21,22 @@ __device__ static inline double initPhi(const double x, const double y, const do
   return f(1.0,x+0.9)+f(1.0,y+0.99)+f(1.0,z+1.1)-f(10.0,x-1.2)-f(10.0,y-1.1)-f(10.0,z-1.01);
 }
 
+__global__ __attribute((unused)) static void initPhi(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const phi)
+{
+  const int i = threadIdx.z+blockDim.z*blockIdx.z;
+  const int j = threadIdx.y+blockDim.y*blockIdx.y;
+  const int k = threadIdx.x+blockDim.x*blockIdx.x;
+
+  if ((i >= ni) || (j >= nj) || (k >= nk)) return;
+
+  const double x = xLo+i*dx;
+  const double y = yLo+j*dy;
+  const double z = zLo+k*dz;
+
+  const int ijk = (i*nj+j)*nk+k;
+  phi[ijk] = initPhi(x,y,z);
+}
+
 __device__ static inline double ddf(const double a, const double x)
 {
   const double c = cos(x);
@@ -35,7 +51,7 @@ __device__ static inline double initRho(const double x, const double y, const do
   return ddf(1.0,x+0.9)+ddf(1.0,y+0.99)+ddf(1.0,z+1.1)-ddf(10.0,x-1.2)-ddf(10.0,y-1.1)-ddf(10.0,z-1.01);
 }
 
-__global__ __attribute((unused)) static void init(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const rho)
+__global__ __attribute((unused)) static void initRho(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const rho)
 {
   const int i = threadIdx.z+blockDim.z*blockIdx.z;
   const int j = threadIdx.y+blockDim.y*blockIdx.y;
@@ -177,7 +193,8 @@ class FishFry
       std::vector<TimeStamp> totalStamps;
 
       for (int i = 0; i <= nIters; i++) {
-        ::init<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,f_);
+        ::initRho<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,f_);
+        ::initPhi<<<nb_,nt_>>>(ni_,nj_,nk_,xLo_,yLo_,zLo_,dx_,dy_,dz_,phi_);
         CHECK(cudaGetLastError());
         CHECK(cudaDeviceSynchronize());
         MPI_Barrier(MPI_COMM_WORLD);

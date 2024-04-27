@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
-#include <mpi.h>
 
 __global__ static void setA(const int n, const double denomX, const double denomY, const double denomZ, double *const __restrict__ a)
 {
@@ -91,9 +90,7 @@ void Jawfish::initSmoother()
   CHECK(cudaDeviceSynchronize());
   assert(iMax > 0);
 
-  int rank = MPI_PROC_NULL;
-  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-  if (rank == 0) fprintf(stderr,"# smoother %d^3, iters %d, max error %g\n",n,smootherIters_,b[iMax-1]);
+  if (idi_+idj_+idk_ == 0) fprintf(stderr,"# smoother %d^3, iters %d, max error %g\n",n,smootherIters_,b[iMax-1]);
 
   CHECK(cudaDeviceSynchronize());
   CHECK(cudaFree(info));
