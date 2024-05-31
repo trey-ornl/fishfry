@@ -1,7 +1,4 @@
 #include "Jawfish.hpp"
-#include "gpu.hpp"
-
-#include <mpi.h>
 
 void Jawfish::solve(const size_t bytes, double *const density, double *const potential, std::vector<TimeStamp> &stamps)
 {
@@ -12,33 +9,51 @@ void Jawfish::solve(const size_t bytes, double *const density, double *const pot
   const int n = di_*dj_*dk_;
   double mySum = 0;
   CHECK(cublasDasum(handle_,n,density,1,&mySum));
-  CHECK(cudaDeviceSynchronize());
+  CHECK(cudaEventRecord(event_,0));
 
-  //CHECK(cudaMemset(potential,0,bytes_));
+  CHECK(cudaMemset(potential,0,bytes_));
+  CHECK(cudaMemset(dPhi_,0,bytes_));
   CHECK(cudaMemcpyAsync(dRho_,density,bytes_,cudaMemcpyDeviceToDevice,0));
 
+  CHECK(cudaEventSynchronize(event_));
   double inSum = 0;
   MPI_Allreduce(&mySum,&inSum,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
   const bool root = (idi_+idj_+idk_ == 0);
   if (root) fprintf(stderr,"# density asum %g\n",inSum);
   stamps.push_back({"Input ASum",MPI_Wtime()});
 
-  CHECK(cudaMemcpyAsync(dPhi_,potential,bytes_,cudaMemcpyDeviceToDevice,0));
-  setLaplacian(dPhi_,dRho_);
-
-  double alpha = -1.0;
-  CHECK(cublasDaxpy(handle_,n,&alpha,density,1,dRho_,1));
-  mySum = 0;
-  CHECK(cublasDasum(handle_,n,dRho_,1,&mySum));
-  CHECK(cudaDeviceSynchronize());
-  stamps.push_back({"Laplacian Error",MPI_Wtime()});
-  double errSum = 0;
-  MPI_Allreduce(&mySum,&errSum,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-  if (root) fprintf(stderr,"# err asum %g / density asum %g = %g\n",errSum,inSum,errSum/inSum);
-  return;
-
   double err = 0;
   for (int outer = 0; outer < maxIters_; outer++) {
-    if (err <= eps_) break;
+    for (int inner = 0; inner < neighborIters_; inner++) {
+      addLocalDST();
+      diffLaplacian();
+      CHECK(cudaDeviceSynchronize());
+      if ((idi_ == 0) && (idj_ == 0) && (idk_ == 0)) {
+        for (int i = 0; i < std::min({di_,dj_,dk_}); i++) printf("%d %g %g\n",i,density[i+di_*(i+dj_*i)],dRho_[i+di_*(i+dj_*i)]);
+        fflush(stdout);
+        exit(0);
+      }
+#if 0
+      for (int smooth = 0; smooth < smootherIters_; smooth++) {
+        diffLaplacianEdges();
+        smoothEdges();
+      }
+      diffLaplacian();
+#endif
+    }
+#if 0
+    addGlobalDHT();
+    updateDiffLaplacian(density,potential);
+    if ((outer+1) >= minIters_) {
+      double mySum = 0;
+      CHECK(cublasDasum(handle_,n,dRho_,1,&mySum));
+      CHECK(cudaDeviceSynchronize());
+      double sum = 0;
+      MPI_Allreduce(&mySum,&sum,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+      err = sum/inSum;
+      if (root) fprintf(stderr,"# iter %d density err %g\n",outer,err);
+      if (err <= eps_) break;
+    }
+#endif
   }
 }

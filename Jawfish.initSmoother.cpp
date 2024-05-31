@@ -1,5 +1,4 @@
 #include "Jawfish.hpp"
-#include "gpu.hpp"
 
 #include <algorithm>
 #include <cassert>

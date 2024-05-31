@@ -44,7 +44,6 @@ class Jawfish {
 
   private:
     size_t bytes_; //!< Max bytes needed for argument arrays
-    double ddi_,ddj_,ddk_; //!< Frequency-independent terms in Poisson solve
     double denomX_,denomY_,denomZ_;
     double *dhtMy_,*dhtSum_;
     int di_,dj_,dk_; //!< Max number of local points in each dimension
@@ -61,14 +60,20 @@ class Jawfish {
     int lapSendTag_[lapNeighbors_];
     LapBuffers lapRecv_,lapSend_;
     MPI_Request lapRecvReq_[lapNeighbors_],lapSendReq_[lapNeighbors_];
-    int maxIters_;
+    int maxIters_,minIters_;
     int mi_,mj_,mk_; //!< Number of MPI tasks in each dimension of 3D domain
     int ni_,nj_,nk_; //!< Global number of real points in each dimension
+    int neighborIters_;
     cufftHandle planI_,planJ_,planK_; //!< For D2Z FFTs used by local 3D DST
+    double scaleDST_;
+    double scaleI_,scaleJ_,scaleK_; //!< Frequency-independent terms in Poisson solve
+    double si_,sj_,sk_;
     double *smoother_;
     int smootherIters_;
     int smootherRadius_;
 
+    void addLocalDST();
+    void diffLaplacian();
     void initSmoother();
     void setLaplacian(const double *in, double *out);
 };

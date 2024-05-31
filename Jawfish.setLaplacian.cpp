@@ -1,8 +1,6 @@
 #include "Jawfish.hpp"
-#include "gpu.hpp"
 
 #include <algorithm>
-#include <mpi.h>
 
 __global__ static void copyToSend(const int di, const int dj, const int dk, const double *const in, Jawfish::LapBuffers send)
 {
