@@ -26,24 +26,18 @@ void Jawfish::solve(const size_t bytes, double *const density, double *const pot
   for (int outer = 0; outer < maxIters_; outer++) {
     for (int inner = 0; inner < neighborIters_; inner++) {
       addLocalDST();
-      diffLaplacian();
-      CHECK(cudaDeviceSynchronize());
-      if ((idi_ == 0) && (idj_ == 0) && (idk_ == 0)) {
-        for (int i = 0; i < std::min({di_,dj_,dk_}); i++) printf("%d %g %g\n",i,density[i+di_*(i+dj_*i)],dRho_[i+di_*(i+dj_*i)]);
-        fflush(stdout);
-        exit(0);
-      }
 #if 0
       for (int smooth = 0; smooth < smootherIters_; smooth++) {
-        diffLaplacianEdges();
+        setLaplacian(dPhi_,dRho_);
         smoothEdges();
       }
-      diffLaplacian();
 #endif
+      setLaplacian(dPhi_,dRho_);
     }
 #if 0
     addGlobalDHT();
     updateDiffLaplacian(density,potential);
+#endif
     if ((outer+1) >= minIters_) {
       double mySum = 0;
       CHECK(cublasDasum(handle_,n,dRho_,1,&mySum));
@@ -52,8 +46,8 @@ void Jawfish::solve(const size_t bytes, double *const density, double *const pot
       MPI_Allreduce(&mySum,&sum,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
       err = sum/inSum;
       if (root) fprintf(stderr,"# iter %d density err %g\n",outer,err);
+      return;
       if (err <= eps_) break;
     }
-#endif
   }
 }

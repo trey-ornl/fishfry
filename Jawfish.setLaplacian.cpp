@@ -8,26 +8,29 @@ __global__ static void copyToSend(const int di, const int dj, const int dk, cons
 
   const int p = threadIdx.x+blockIdx.x*blockDim.x;
   const int q = threadIdx.y+blockIdx.y*blockDim.y;
+  const int dim = blockIdx.z;
 
-  if ((p < dj) && (q < dk)) {
+  if ((dim == 0) && (p < dj) && (q < dk)) {
+
     const int j = p;
     const int k = q;
     send.buf[0][j+dj*k] = in[0+di*(j+dj*k)];
     send.buf[1][j+dj*k] = in[di-1+di*(j+dj*k)];
-  }
 
-  if ((p < di) && (q < dk)) {
+  } else if ((dim == 1) && (p < di) && (q < dk)) {
+
     const int i = p;
     const int k = q;
     send.buf[2][i+di*k] = in[i+di*(0+dj*k)];
     send.buf[3][i+di*k] = in[i+di*(dj-1+dj*k)];
-  }
 
-  if ((p < di) && (q < dj)) {
+  } else if ((dim == 2) && (p < di) && (q < dj)) {
+
     const int i = p;
     const int j = q;
     send.buf[4][i+di*j] = in[i+di*(j+dj*0)];
     send.buf[5][i+di*j] = in[i+di*(j+dj*(dk-1))];
+
   }
 }
 
@@ -58,20 +61,23 @@ __global__ static void setLapEdges(const int di, const int dj, const int dk, con
   const int dij = di*dj;
   const int p = threadIdx.x+blockIdx.x*blockDim.x;
   const int q = threadIdx.y+blockIdx.y*blockDim.y;
+  const int dim = blockIdx.z;
 
-  if ((p < dj) && (q < dk)) {
+  if ((dim == 0) && (p < dj) && (q < dk)) {
+
     ::setLapEdge(0,p,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
     ::setLapEdge(di-1,p,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
-  }
 
-  if ((p > 0) && (p < di-1) && (q < dk)) {
+  } else if ((dim == 1) && (p > 0) && (p < di-1) && (q < dk)) {
+
     ::setLapEdge(p,0,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
     ::setLapEdge(p,dj-1,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
-  }
 
-  if ((p > 0) && (p < di-1) && (q > 0) && (q < dj-1)) {
+  } else if ((dim == 2) && (p > 0) && (p < di-1) && (q > 0) && (q < dj-1)) {
+
     ::setLapEdge(p,q,0,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
     ::setLapEdge(p,q,dk-1,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
+
   }
 }
 
@@ -98,7 +104,7 @@ void Jawfish::setLaplacian(const double *const in, double *const out)
   for (int i = 0; i < lapNeighbors_; i++) MPI_Irecv(lapRecv_.buf[i],lapCount_[i],MPI_DOUBLE,lapRank_[i],lapRecvTag_[i],MPI_COMM_WORLD,&lapRecvReq_[i]);
 
   constexpr dim3 block2(16,16);
-  const dim3 grid2((std::max(di_,dj_)-1)/block2.x+1,(std::max(dj_,dk_)-1)/block2.y+1);
+  const dim3 grid2((std::max(di_,dj_)-1)/block2.x+1,(std::max(dj_,dk_)-1)/block2.y+1,3);
   ::copyToSend<<<grid2,block2>>>(di_,dj_,dk_,in,lapSend_);
   CHECK(cudaEventRecord(event_,0));
 

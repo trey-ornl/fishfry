@@ -76,4 +76,5 @@ class Jawfish {
     void diffLaplacian();
     void initSmoother();
     void setLaplacian(const double *in, double *out);
+    void smoothEdges();
 };
