@@ -46,7 +46,7 @@ class Jawfish {
     size_t bytes_; //!< Max bytes needed for argument arrays
     double denomX_,denomY_,denomZ_;
     double *dhtMy_,*dhtSum_;
-    int di_,dj_,dk_; //!< Max number of local points in each dimension
+    int di_,dj_,dk_; //!< Number of local points in each dimension
     double *dPhi_,*dRho_;
     double *dstA_,*dstB_;
     double dx_,dy_,dz_;
@@ -75,6 +75,15 @@ class Jawfish {
     void addLocalDST();
     void diffLaplacian();
     void initSmoother();
+    void plot(const double *density) const;
     void setLaplacian(const double *in, double *out);
     void smoothEdges();
+
+    int neighbor(const int di, const int dj, const int dk) const
+    {
+      const int idi = (idi_+di+mi_)%mi_;
+      const int idj = (idj_+dj+mj_)%mj_;
+      const int idk = (idk_+dk+mk_)%mk_;
+      return idi+mi_*(idj+mj_*idk);
+    }
 };

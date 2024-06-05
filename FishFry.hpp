@@ -143,7 +143,7 @@ class FishFry
 
       MPI_Comm_rank(MPI_COMM_WORLD,&rank_);
       if (rank_ == 0) {
-        printf("FishFry<%s>: %dx%dx%d points over %dx%dx%d MPI processes",typeid(*poisson_).name(),nPoints[0],nPoints[1],nPoints[2],nTasks[0],nTasks[1],nTasks[2]);
+        printf("# FishFry<%s>: %dx%dx%d points over %dx%dx%d MPI processes",typeid(*poisson_).name(),nPoints[0],nPoints[1],nPoints[2],nTasks[0],nTasks[1],nTasks[2]);
 #ifdef STENCIL_7PT
         printf(", 7-point Laplacian\n");
 #else

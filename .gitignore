@@ -1,4 +1,6 @@
+*.?pp.
 *.o
+*.txt
 core*
 fishfry
 fishfry-*.out

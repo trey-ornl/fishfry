@@ -98,10 +98,8 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   // X
   const int xCount = dj_*dk_;
   lapCount_[0] = lapCount_[1] = xCount;
-  const int idim = (idi_-1+mi_)%mi_;
-  lapRank_[0] = idim+mi_*(idj_+mj_*idk_);
-  const int idip = (idi_+1)%mi_;
-  lapRank_[1] = idip+mi_*(idj_+mj_*idk_);
+  lapRank_[0] = neighbor(-1,0,0);
+  lapRank_[1] = neighbor(1,0,0);
   const long xBytes = xCount*sizeof(double);
   lapRecvTag_[0] = lapSendTag_[1] = lapTag++;
   lapRecvTag_[1] = lapSendTag_[0] = lapTag++;
@@ -113,10 +111,8 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   // Y
   const int yCount = di_*dk_;
   lapCount_[2] = lapCount_[3] = yCount;
-  const int idjm = (idj_-1+mj_)%mj_;
-  lapRank_[2] = idi_+mi_*(idjm+mj_*idk_);
-  const int idjp = (idj_+1)%mj_;
-  lapRank_[3] = idi_+mi_*(idjp+mj_*idk_);
+  lapRank_[2] = neighbor(0,-1,0);
+  lapRank_[3] = neighbor(0,1,0);
   const long yBytes = yCount*sizeof(double);
   lapRecvTag_[2] = lapSendTag_[3] = lapTag++;
   lapRecvTag_[3] = lapSendTag_[2] = lapTag++;
@@ -128,10 +124,8 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   // Z
   const int zCount = di_*dj_;
   lapCount_[4] = lapCount_[5] = di_*dj_;
-  const int idkm = (idk_-1+mk_)%mk_;
-  lapRank_[4] = idi_+mi_*(idj_+mj_*idkm);
-  const int idkp = (idk_+1)%mk_;
-  lapRank_[5] = idi_+mi_*(idj_+mj_*idkp);
+  lapRank_[4] = neighbor(0,0,-1);
+  lapRank_[5] = neighbor(0,0,1);
   const long zBytes = zCount*sizeof(double);
   lapRecvTag_[4] = lapSendTag_[5] = lapTag++;
   lapRecvTag_[5] = lapSendTag_[4] = lapTag++;
