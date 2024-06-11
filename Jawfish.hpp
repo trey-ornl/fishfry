@@ -73,7 +73,7 @@ class Jawfish {
     int smootherRadius_;
 
     void addLocalDST();
-    void diffLaplacian();
+    void diffLaplacian(const double *goal);
     void initSmoother();
     void plot(const double *density) const;
     void setLaplacian(const double *in, double *out);

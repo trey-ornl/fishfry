@@ -18,7 +18,7 @@ __device__ static inline double f(const double a, const double x)
 
 __device__ static inline double initPhi(const double x, const double y, const double z)
 {
-  return f(1.0,x+0.9)+f(1.0,y+0.99)+f(1.0,z+1.1)-f(10.0,x-1.2)-f(10.0,y-1.1)-f(10.0,z-1.01);
+  return f(1.0,z+0.9)+f(1.0,y+0.99)+f(1.0,x+1.1)-f(10.0,z-1.2)-f(10.0,y-1.1)-f(10.0,x-1.01);
 }
 
 __global__ __attribute((unused)) static void initPhi(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const phi)
@@ -48,7 +48,7 @@ __device__ static inline double ddf(const double a, const double x)
 
 __device__ static inline double initRho(const double x, const double y, const double z)
 {
-  return ddf(1.0,x+0.9)+ddf(1.0,y+0.99)+ddf(1.0,z+1.1)-ddf(10.0,x-1.2)-ddf(10.0,y-1.1)-ddf(10.0,z-1.01);
+  return ddf(1.0,z+0.9)+ddf(1.0,y+0.99)+ddf(1.0,x+1.1)-ddf(10.0,z-1.2)-ddf(10.0,y-1.1)-ddf(10.0,x-1.01);
 }
 
 __global__ __attribute((unused)) static void initRho(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const rho)
@@ -152,8 +152,8 @@ class FishFry
         fflush(stdout);
       }
       const int id[] = { rank_/(nTasks[1]*nTasks[2]), (rank_/nTasks[2])%nTasks[1], rank_%nTasks[2] };
-      const double lo[] = { -M_PI, -M_PI, -M_PI };
-      const double hi[] = { M_PI-dx_, M_PI-dy_, M_PI-dz_ };
+      const double lo[] = { dx_-M_PI, dy_-M_PI, dz_-M_PI };
+      const double hi[] = { M_PI, M_PI, M_PI };
       poisson_.reset(new P(nPoints,lo,hi,nTasks,id));
 
       xLo_ = lo[0]+id[0]*ni_*dx_;

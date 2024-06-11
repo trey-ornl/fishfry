@@ -69,5 +69,7 @@ void Jawfish::plot(const double *const a) const
   }
   CHECK(cudaFree(buf));
   MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Finalize();
+  exit(0);
 }
 
