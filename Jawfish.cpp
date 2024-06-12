@@ -14,9 +14,9 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   dy_((hi[1]-lo[1])/double(n[1]-1)),
   dz_((hi[0]-lo[0])/double(n[0]-1)),
   eps_(1.0e-7),
-  hi_(m[2]),
-  hj_(m[1]),
-  hk_(m[0]),
+  hi_(m[2]+1),
+  hj_(m[1]+1),
+  hk_(m[0]+1),
   idi_(id[2]),
   idj_(id[1]),
   idk_(id[0]),
@@ -59,9 +59,9 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
     int scale = 0;
     sscanf(jawfishDHTPerRank,"%d",&scale);
     if (scale > 0) {
-      hi_ *= scale;
-      hj_ *= scale;
-      hk_ *= scale;
+      hi_ = scale*mi_+1;
+      hj_ = scale*mj_+1;
+      hk_ = scale*mk_+1;
     }
   }
 
