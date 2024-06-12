@@ -43,6 +43,7 @@ class Jawfish {
     void solve(size_t bytes, double *density, double *potential, std::vector<TimeStamp> &stamps);
 
   private:
+    double angleI_,angleJ_,angleK_;
     size_t bytes_; //!< Max bytes needed for argument arrays
     double denomX_,denomY_,denomZ_;
     double *dhtMy_,*dhtSum_;
@@ -53,6 +54,7 @@ class Jawfish {
     double eps_;
     cudaEvent_t event_;
     cublasHandle_t handle_; //!< For GPU Blas calls
+    int hi_,hj_,hk_; //!< Global DHT functions per dimension
     int idi_,idj_,idk_; //!< MPI coordinates of 3D block
     int lapCount_[lapNeighbors_];
     int lapRank_[lapNeighbors_];
@@ -64,18 +66,19 @@ class Jawfish {
     int mi_,mj_,mk_; //!< Number of MPI tasks in each dimension of 3D domain
     int ni_,nj_,nk_; //!< Global number of real points in each dimension
     int neighborIters_;
+    int oi_,oj_,ok_; //!< Local lower bounds for global indices
     cufftHandle planI_,planJ_,planK_; //!< For D2Z FFTs used by local 3D DST
     double scaleDST_;
-    double scaleI_,scaleJ_,scaleK_; //!< Frequency-independent terms in Poisson solve
     double si_,sj_,sk_;
     double *smoother_;
     int smootherIters_;
     int smootherRadius_;
 
+    void addGlobalDHT();
     void addLocalDST();
     void diffLaplacian(const double *goal);
     void initSmoother();
-    void plot(const double *density) const;
+    void plot(const double *density, const bool stop = true) const;
     void setLaplacian(const double *in, double *out);
     void smoothEdges();
 

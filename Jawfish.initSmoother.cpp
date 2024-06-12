@@ -58,12 +58,9 @@ void Jawfish::initSmoother()
   CHECK(cudaMalloc(&b,bBytes));
   CHECK(cudaMemset(b,0,bBytes));
 
-  const double denomX = 1.0/(dx_*dx_);
-  const double denomY = 1.0/(dy_*dy_);
-  const double denomZ = 1.0/(dz_*dz_);
   constexpr dim3 block(8,8,8);
   const dim3 grid((n-1)/block.x+1,(n-1)/block.y+1,(n-1)/block.z+1);
-  setA<<<grid,block>>>(n,denomX,denomY,denomZ,a);
+  setA<<<grid,block>>>(n,denomX_,denomY_,denomZ_,a);
 
   const long middle = long(smootherRadius_)+1L+long(np2)*(long(smootherRadius_)+1L+long(np2)*(long(smootherRadius_)+1L));
   const double one = 1.0;
@@ -80,7 +77,7 @@ void Jawfish::initSmoother()
   assert(*info == 0);
   CHECK(cudaMemcpy(smoother_,b,smootherBytes,cudaMemcpyDeviceToDevice));
   CHECK(cudaMemset(a,0,aBytes));
-  setA<<<grid,block>>>(n,denomX,denomY,denomZ,a);
+  setA<<<grid,block>>>(n,denomX_,denomY_,denomZ_,a);
   const double alpha = 1.0;
   const double beta = 0.0;
   CHECK(cublasDgemv(handle_,CUBLAS_OP_N,np23,n3,&alpha,a,np23,smoother_,1,&beta,b,1));

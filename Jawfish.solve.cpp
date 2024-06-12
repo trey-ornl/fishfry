@@ -10,7 +10,7 @@ void Jawfish::solve(const size_t bytes, double *const density, double *const pot
   double mySum = 0;
   CHECK(cublasDasum(handle_,n,density,1,&mySum));
   CHECK(cudaEventRecord(event_,0));
-  CHECK(cudaMemset(potential,0,bytes_));
+  //CHECK(cudaMemset(potential,0,bytes_));
   CHECK(cudaMemset(dPhi_,0,bytes_));
   CHECK(cudaMemcpyAsync(dRho_,density,bytes_,cudaMemcpyDeviceToDevice,0));
 
@@ -23,6 +23,7 @@ void Jawfish::solve(const size_t bytes, double *const density, double *const pot
 
   double err = 0;
   for (int outer = 0; outer < maxIters_; outer++) {
+#if 0
     for (int inner = 0; inner < neighborIters_; inner++) {
       addLocalDST();
       for (int smooth = 0; smooth < smootherIters_; smooth++) {
@@ -31,10 +32,11 @@ void Jawfish::solve(const size_t bytes, double *const density, double *const pot
       }
       diffLaplacian(density);
     }
-#if 0
-    addGlobalDHT();
-    updateDiffLaplacian(density,potential);
 #endif
+    addGlobalDHT();
+    plot(potential,false);
+    plot(dPhi_,true);
+    diffLaplacian(density);
     if ((outer+1) >= minIters_) {
       double mySum = 0;
       CHECK(cublasDasum(handle_,n,dRho_,1,&mySum));

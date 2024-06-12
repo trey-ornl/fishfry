@@ -32,7 +32,7 @@ static __global__ void copyIn(const int di, const int dj, const int dk, const do
   }
 }
 
-static __global__ void solve(const double scaleI, const double scaleJ, const double scaleK, const double si, const double sj, const double sk, const int di, const int dj, const int dk, const double *const in, double *const __restrict__ out)
+static __global__ void solve(double denomX2, double denomY2, double denomZ2, const double si, const double sj, const double sk, const int di, const int dj, const int dk, const double *const in, double *const __restrict__ out)
 {
   const int i = threadIdx.x+blockIdx.x*blockDim.x;
   const int j = threadIdx.y+blockIdx.y*blockDim.y;
@@ -47,10 +47,10 @@ static __global__ void solve(const double scaleI, const double scaleJ, const dou
       // Pick out imaginary entries
       double inijk = in[2*i+1+2*(di+1)*(j+dj*k)];
       // Solve Poisson in frequency space
-      const double denomI = scaleI*(cos(si*double(i))-1.0);
-      const double denomJ = scaleJ*(cos(sj*double(j+1))-1.0);
-      const double denomK = scaleK*(cos(sk*double(k+1))-1.0);
-      inijk /= (denomI+denomJ+denomK);
+      denomX2 *= cos(si*double(i))-1.0;
+      denomY2 *= cos(sj*double(j+1))-1.0;
+      denomZ2 *= cos(sk*double(k+1))-1.0;
+      inijk /= (denomX2+denomY2+denomZ2);
       // Pad for D2Z
       out[i+di2*(j+dj*k)] = -inijk;
       out[di2-i+di2*(j+dj*k)] = inijk;
@@ -108,7 +108,7 @@ void Jawfish::addLocalDST()
   CHECK(cufftExecD2Z(planJ_,dstA_,(cufftDoubleComplex*)dstB_));
   ::transposeXZ<<<grid,block>>>(di_,dj_,dk_,dstB_,dstA_);
   CHECK(cufftExecD2Z(planK_,dstA_,(cufftDoubleComplex*)dstB_));
-  ::solve<<<grid,block>>>(scaleI_,scaleJ_,scaleK_,si_,sj_,sk_,di_,dj_,dk_,dstB_,dstA_);
+  ::solve<<<grid,block>>>(2*denomX_,2*denomY_,2*denomZ_,si_,sj_,sk_,di_,dj_,dk_,dstB_,dstA_);
   CHECK(cufftExecD2Z(planK_,dstA_,(cufftDoubleComplex*)dstB_));
   ::transposeXZ<<<grid,block>>>(di_,dj_,dk_,dstB_,dstA_);
   CHECK(cufftExecD2Z(planJ_,dstA_,(cufftDoubleComplex*)dstB_));

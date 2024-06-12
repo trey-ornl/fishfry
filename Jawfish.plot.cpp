@@ -24,7 +24,7 @@ static __global__ void copyFromBuf(const int di, const int dj, const int dk, con
   out[i+ni*(j+nj*k)] = in[block+local];
 }
 
-void Jawfish::plot(const double *const a) const
+void Jawfish::plot(const double *const a, const bool stop) const
 {
   CHECK(cudaDeviceSynchronize());
   MPI_Barrier(MPI_COMM_WORLD);
@@ -63,13 +63,16 @@ void Jawfish::plot(const double *const a) const
       }
       printf("\n");
     }
+    printf("\n");
     CHECK(cudaFreeHost(ah));
     CHECK(cudaFree(ad));
     CHECK(cudaFree(bufAll));
   }
   CHECK(cudaFree(buf));
   MPI_Barrier(MPI_COMM_WORLD);
-  MPI_Finalize();
-  exit(0);
+  if (stop) {
+    MPI_Finalize();
+    exit(0);
+  }
 }
 

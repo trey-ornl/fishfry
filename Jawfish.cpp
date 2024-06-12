@@ -1,6 +1,9 @@
 #include "Jawfish.hpp"
 
 Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const int m[3], const int id[3]):
+  angleI_(2.0*M_PI/double(n[2])),
+  angleJ_(2.0*M_PI/double(n[1])),
+  angleK_(2.0*M_PI/double(n[0])),
   dhtMy_(nullptr),
   dhtSum_(nullptr),
   dPhi_(nullptr),
@@ -11,6 +14,9 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   dy_((hi[1]-lo[1])/double(n[1]-1)),
   dz_((hi[0]-lo[0])/double(n[0]-1)),
   eps_(1.0e-7),
+  hi_(m[2]),
+  hj_(m[1]),
+  hk_(m[0]),
   idi_(id[2]),
   idj_(id[1]),
   idk_(id[0]),
@@ -23,29 +29,24 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   nj_(n[1]),
   nk_(n[0]),
   neighborIters_(1),
-  scaleDST_(0),
-  scaleI_(2.0/(dx_*dx_)),
-  scaleJ_(2.0/(dy_*dy_)),
-  scaleK_(2.0/(dz_*dz_)),
-  si_(0),
-  sj_(0),
-  sk_(0),
   smoother_(nullptr),
-  smootherIters_(1),
-  smootherRadius_(0)
+  smootherIters_(1)
 {
   denomX_ = 1.0/(dx_*dx_);
   denomY_ = 1.0/(dy_*dy_);
   denomZ_ = 1.0/(dz_*dz_);
 
   const int di = (ni_-1)/mi_+1;
-  di_ = std::min(di,ni_-idi_*di);
+  oi_ = idi_*di;
+  di_ = std::min(di,ni_-oi_);
   si_ = M_PI/double(di_);
   const int dj = (nj_-1)/mj_+1;
-  dj_ = std::min(dj,nj_-idj_*dj);
+  oj_ = idj_*dj;
+  dj_ = std::min(dj,nj_-oj_);
   sj_ = M_PI/double(dj_);
   const int dk = (nk_-1)/mk_+1;
-  dk_ = std::min(dk,nk_-idk_*dk);
+  ok_ = idk_*dk;
+  dk_ = std::min(dk,nk_-ok_);
   sk_ = M_PI/double(dk_);
   bytes_ = long(di_)*long(dj_)*long(dk_)*sizeof(double);
   scaleDST_ = 1.0/(8.0*double(di_)*double(dj_)*double(dk_));
@@ -53,7 +54,18 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   CHECK(cublasCreate(&handle_));
   CHECK(cublasSetPointerMode(handle_,CUBLAS_POINTER_MODE_HOST));
 
-  const long dhtBytes = (mi_+1)*(mj_+1)*(mk_+1)*sizeof(double);
+  const char *const jawfishDHTPerRank = getenv("JAWFISH_DHT_PER_RANK");
+  if (jawfishDHTPerRank) {
+    int scale = 0;
+    sscanf(jawfishDHTPerRank,"%d",&scale);
+    if (scale > 0) {
+      hi_ *= scale;
+      hj_ *= scale;
+      hk_ *= scale;
+    }
+  }
+
+  const long dhtBytes = hi_*hj_*hk_*sizeof(double);
   CHECK(cudaMalloc(&dhtMy_,dhtBytes));
   CHECK(cudaMalloc(&dhtSum_,dhtBytes));
 
@@ -89,7 +101,7 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   const char *const jawfishNeighborIters = getenv("JAWFISH_NEIGHBOR_ITERS");
   if (jawfishNeighborIters) sscanf(jawfishNeighborIters,"%d",&neighborIters_);
 
-  if (idi_+idj_+idk_ == 0) fprintf(stderr,"# Jawfish eps %g, min|max outer iters %d|%d x neighbor iters %d\n",eps_,minIters_,maxIters_,neighborIters_);
+  if (idi_+idj_+idk_ == 0) fprintf(stderr,"# Jawfish eps %g, %dx%dx%d DHT, min|max outer iters %d|%d x neighbor iters %d\n",eps_,hi_,hj_,hk_,minIters_,maxIters_,neighborIters_);
 
   // Laplacian communication
 
