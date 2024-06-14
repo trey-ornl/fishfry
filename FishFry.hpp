@@ -18,8 +18,7 @@ __device__ static inline double f(const double a, const double x)
 
 __device__ static inline double initPhi(const double x, const double y, const double z)
 {
-  //return f(1.0,z+0.9)+f(1.0,y+0.99)+f(1.0,x+1.1)-f(10.0,z-1.2)-f(10.0,y-1.1)-f(10.0,x-1.01);
-  return sin(x)+sin(y+1)+sin(z+2);
+  return f(1.0,z+0.9)+f(1.0,y+0.99)+f(1.0,x+1.1)-f(10.0,z-1.2)-f(10.0,y-1.1)-f(10.0,x-1.01);
 }
 
 __global__ __attribute((unused)) static void initPhi(const int ni, const int nj, const int nk, const double xLo, const double yLo, const double zLo, const double dx, const double dy, const double dz, double *const phi)

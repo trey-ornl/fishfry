@@ -34,7 +34,7 @@ __global__ static void copyToSend(const int di, const int dj, const int dk, cons
   }
 }
 
-__device__ static inline void setLapEdge(const int i, const int j, const int k, const int di, const int dj, const int dk, const int dij, const double denomX, const double denomY, const double denomZ, const Jawfish::LapBuffers &recv, const double *const in, double *const __restrict__ out)
+__device__ static inline void setLapSide(const int i, const int j, const int k, const int di, const int dj, const int dk, const int dij, const double denomX, const double denomY, const double denomZ, const Jawfish::LapBuffers &recv, const double *const in, double *const __restrict__ out)
 {
   const int ijk = i+di*(j+dj*k);
   const double diag = -2.0*in[ijk];
@@ -54,7 +54,7 @@ __device__ static inline void setLapEdge(const int i, const int j, const int k, 
   out[ijk] = lapX+lapY+lapZ;
 }
 
-__global__ static void setLapEdges(const int di, const int dj, const int dk, const double denomX, const double denomY, const double denomZ, const Jawfish::LapBuffers recv, const double *const in, double *const __restrict__ out)
+__global__ static void setLapSides(const int di, const int dj, const int dk, const double denomX, const double denomY, const double denomZ, const Jawfish::LapBuffers recv, const double *const in, double *const __restrict__ out)
 {
   static_assert(Jawfish::lapNeighbors_ == 6,"assumes 6 Lapacian neighbors");
 
@@ -65,30 +65,30 @@ __global__ static void setLapEdges(const int di, const int dj, const int dk, con
 
   if ((dim == 0) && (p < dj) && (q < dk)) {
 
-    ::setLapEdge(0,p,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
-    ::setLapEdge(di-1,p,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
+    ::setLapSide(0,p,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
+    ::setLapSide(di-1,p,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
 
   } else if ((dim == 1) && (p > 0) && (p < di-1) && (q < dk)) {
 
-    ::setLapEdge(p,0,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
-    ::setLapEdge(p,dj-1,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
+    ::setLapSide(p,0,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
+    ::setLapSide(p,dj-1,q,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
 
   } else if ((dim == 2) && (p > 0) && (p < di-1) && (q > 0) && (q < dj-1)) {
 
-    ::setLapEdge(p,q,0,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
-    ::setLapEdge(p,q,dk-1,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
+    ::setLapSide(p,q,0,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
+    ::setLapSide(p,q,dk-1,di,dj,dk,dij,denomX,denomY,denomZ,recv,in,out);
 
   }
 }
 
 __global__ static void setLapInner(const int di, const int dj, const int dk, const double denomX, const double denomY, const double denomZ, const double *const in, double *const __restrict__ out)
 {
-  // +1 to avoid edges
+  // +1 to avoid sides
   const int i = 1+threadIdx.x+blockIdx.x*blockDim.x;
   const int j = 1+threadIdx.y+blockIdx.y*blockDim.y;
   const int k = 1+threadIdx.z+blockIdx.z*blockDim.z;
 
-  if ((i < di-1) && (j < dj-1) && (k < dk-1)) { // -1 to avoid edges
+  if ((i < di-1) && (j < dj-1) && (k < dk-1)) { // -1 to avoid sides
     const int ijk = i+di*(j+dj*k);
     const int dij = di*dj;
     const double diag = -2.0*in[ijk];
@@ -109,7 +109,7 @@ void Jawfish::setLaplacian(const double *const in, double *const out)
   CHECK(cudaEventRecord(event_,0));
 
   constexpr dim3 block3(8,8,8);
-  const dim3 grid3((di_-3)/block3.x+1,(dj_-3)/block3.y+1,(dk_-3)/block3.z+1); // -2 to avoid edges
+  const dim3 grid3((di_-3)/block3.x+1,(dj_-3)/block3.y+1,(dk_-3)/block3.z+1); // -2 to avoid sides
   ::setLapInner<<<grid3,block3>>>(di_,dj_,dk_,denomX_,denomY_,denomZ_,in,out);
 
   CHECK(cudaEventSynchronize(event_));
@@ -117,7 +117,7 @@ void Jawfish::setLaplacian(const double *const in, double *const out)
 
   MPI_Waitall(lapNeighbors_,lapRecvReq_,MPI_STATUSES_IGNORE);
 
-  ::setLapEdges<<<grid2,block2>>>(di_,dj_,dk_,denomX_,denomY_,denomZ_,lapRecv_,in,out);
+  ::setLapSides<<<grid2,block2>>>(di_,dj_,dk_,denomX_,denomY_,denomZ_,lapRecv_,in,out);
 
   MPI_Waitall(lapNeighbors_,lapSendReq_,MPI_STATUSES_IGNORE);
 }

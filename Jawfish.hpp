@@ -80,7 +80,7 @@ class Jawfish {
     void initSmoother();
     void plot(const double *density, const bool stop = true) const;
     void setLaplacian(const double *in, double *out);
-    void smoothEdges();
+    void smoothSides();
 
     int neighbor(const int di, const int dj, const int dk) const
     {
@@ -88,5 +88,12 @@ class Jawfish {
       const int idj = (idj_+dj+mj_)%mj_;
       const int idk = (idk_+dk+mk_)%mk_;
       return idi+mi_*(idj+mj_*idk);
+    }
+
+    void stop() const
+    {
+      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Finalize();
+      exit(0);
     }
 };

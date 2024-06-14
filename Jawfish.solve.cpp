@@ -27,7 +27,7 @@ void Jawfish::solve(const size_t bytes, double *const density, double *const pot
       addLocalDST();
       for (int smooth = 0; smooth < smootherIters_; smooth++) {
         diffLaplacian(density);
-        smoothEdges();
+        smoothSides();
       }
       diffLaplacian(density);
     }
