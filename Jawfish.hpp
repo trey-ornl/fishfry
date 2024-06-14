@@ -48,6 +48,7 @@ class Jawfish {
     double denomX_,denomY_,denomZ_;
     double *dhtMy_,*dhtSum_;
     int di_,dj_,dk_; //!< Number of local points in each dimension
+    int diMax_,djMax_,dkMax_;
     double *dPhi_,*dRho_;
     double *dstA_,*dstB_;
     double dx_,dy_,dz_;
@@ -82,12 +83,12 @@ class Jawfish {
     void setLaplacian(const double *in, double *out);
     void smoothSides();
 
-    int neighbor(const int di, const int dj, const int dk) const
+    int neighbor(const int deltaI, const int deltaJ, const int deltaK) const
     {
-      const int idi = (idi_+di+mi_)%mi_;
-      const int idj = (idj_+dj+mj_)%mj_;
-      const int idk = (idk_+dk+mk_)%mk_;
-      return idi+mi_*(idj+mj_*idk);
+      const int thatI = (idi_+deltaI+mi_)%mi_;
+      const int thatJ = (idj_+deltaJ+mj_)%mj_;
+      const int thatK = (idk_+deltaK+mk_)%mk_;
+      return thatI+mi_*(thatJ+mj_*thatK);
     }
 
     void stop() const

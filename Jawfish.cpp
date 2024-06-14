@@ -36,17 +36,17 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   denomY_ = 1.0/(dy_*dy_);
   denomZ_ = 1.0/(dz_*dz_);
 
-  const int di = (ni_-1)/mi_+1;
-  oi_ = idi_*di;
-  di_ = std::min(di,ni_-oi_);
+  diMax_ = (ni_-1)/mi_+1;
+  oi_ = idi_*diMax_;
+  di_ = std::min(diMax_,ni_-oi_);
   si_ = M_PI/double(di_);
-  const int dj = (nj_-1)/mj_+1;
-  oj_ = idj_*dj;
-  dj_ = std::min(dj,nj_-oj_);
+  djMax_ = (nj_-1)/mj_+1;
+  oj_ = idj_*djMax_;
+  dj_ = std::min(djMax_,nj_-oj_);
   sj_ = M_PI/double(dj_);
-  const int dk = (nk_-1)/mk_+1;
-  ok_ = idk_*dk;
-  dk_ = std::min(dk,nk_-ok_);
+  dkMax_ = (nk_-1)/mk_+1;
+  ok_ = idk_*dkMax_;
+  dk_ = std::min(dkMax_,nk_-ok_);
   sk_ = M_PI/double(dk_);
   bytes_ = long(di_)*long(dj_)*long(dk_)*sizeof(double);
   scaleDST_ = 1.0/(8.0*double(di_)*double(dj_)*double(dk_));
