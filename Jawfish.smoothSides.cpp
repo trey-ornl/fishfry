@@ -8,7 +8,9 @@ struct SmoothSendBuffers { double *__restrict__ buf[3]; };
 struct SmoothSides { double *__restrict__ side[3][2]; };
 
 static __global__ void copyFromBuf(
+  const int di, const int dj, const int dk,
   const int diMax, const int djMax, const int dkMax,
+  const int radius,
   SmoothRecvBuffers recv, SmoothSides out)
 {
   const int p = threadIdx.x+blockIdx.x*blockDim.x;
@@ -16,16 +18,37 @@ static __global__ void copyFromBuf(
   const int dim = blockIdx.z;
   const int dir = threadIdx.z;
 
-  const int dp = (dim == 0) ? djMax : diMax;
-  const int dq = (dim == 2) ? djMax : dkMax;
+  const int dp = (dim == 0) ? dj : di;
+  const int dpMax = (dim == 0) ? djMax : diMax;
 
-  if ((p < dp) && (q < dq)) {
-    for (int bq = 0; bq < 3; bq++) {
-      for (int bp = 0; bp < 3; bp++) {
-        out.side[dim][dir][p+bp*dp+3*dp*(q+bq*dq)] = recv.buf[dim][dir][bq][bp][p+dp*q];
-      }
-    }
-  }
+  const int dq = (dim == 2) ? dj: dk;
+  const int dqMax = (dim == 2) ? djMax: dkMax;
+
+  int bp, pr;
+  if (p < radius) {
+    bp = 0;
+    pr = p+dpMax-radius;
+  } else if (p < radius+dp) {
+    bp = 1;
+    pr = p-radius;
+  } else if (p < radius+dp+radius) {
+    bp = 2;
+    pr = p-radius-dp;
+  } else return;
+
+  int bq, qr;
+  if (q < radius) {
+    bq = 0;
+    qr = q+dqMax-radius;
+  } else if (q < radius+dq) {
+    bq = 1;
+    qr = q-radius;
+  } else if (q < radius+dq+radius) {
+    bq = 2;
+    qr = q-radius-dq;
+  } else return;
+
+  out.side[dim][dir][p+(radius+dp+radius)*q] = recv.buf[dim][dir][bq][bp][pr+dpMax*qr];
 }
 
 static __global__ void copyToBuf(
@@ -50,7 +73,6 @@ static __global__ void copyToBuf(
 
 static __global__ void smooth(
   const int di, const int dj, const int dk,
-  const int diMax, const int djMax, const int dkMax,
   const int radius, const double *const smoother,
   const SmoothSides in, double *const __restrict__ inout)
 {
@@ -63,17 +85,19 @@ static __global__ void smooth(
   const int diam = radius+radius+1;
   double sum = 0;
 
+  const int dirr = radius+di+radius;
+
   if (k < radius)
     for (int jr = -radius; jr <= radius; jr++)  
       for (int ir = -radius; ir <= radius; ir++) {
-        sum += in.side[2][0][i+ir+diMax+3*diMax*(j+jr+djMax)]*
+        sum += in.side[2][0][i+ir+radius+dirr*(j+jr+radius)]*
           smoother[ir+radius+diam*(jr+radius+diam*(k+1+radius))];
       }
 
   if (k+radius >= dk-1)
     for (int jr = -radius; jr <= radius; jr++)  
       for (int ir = -radius; ir <= radius; ir++) {
-        sum += in.side[2][1][i+ir+diMax+3*diMax*(j+jr+djMax)]*
+        sum += in.side[2][1][i+ir+radius+dirr*(j+jr+radius)]*
           smoother[ir+radius+diam*(jr+radius+diam*(dk-1-k+radius))];
       }
 
@@ -81,7 +105,7 @@ static __global__ void smooth(
     for (int kr = -radius; kr <= radius; kr++)  
       if ((k+kr != -1) && (k+kr != dk-1))
         for (int ir = -radius; ir <= radius; ir++) {
-          sum += in.side[1][0][i+ir+diMax+3*diMax*(k+kr+dkMax)]*
+          sum += in.side[1][0][i+ir+radius+dirr*(k+kr+radius)]*
             smoother[ir+radius+diam*(j+1+radius+diam*(kr+radius))];
         }
 
@@ -89,16 +113,18 @@ static __global__ void smooth(
     for (int kr = -radius; kr <= radius; kr++)  
       if ((k+kr != -1) && (k+kr != dk-1))
         for (int ir = -radius; ir <= radius; ir++) {
-          sum += in.side[1][1][i+ir+diMax+3*diMax*(k+kr+dkMax)]*
+          sum += in.side[1][1][i+ir+radius+dirr*(k+kr+radius)]*
             smoother[ir+radius+diam*(dj-1-j+radius+diam*(kr+radius))];
         }
+
+  const int djrr = radius+dj+radius;
 
   if (i < radius)
     for (int kr = -radius; kr <= radius; kr++)  
       if ((k+kr != -1) && (k+kr != dk-1))
         for (int jr = -radius; jr <= radius; jr++)
           if ((j+jr != -1) && (j+jr != dj-1)) {
-            sum += in.side[0][0][j+jr+djMax+3*djMax*(k+kr+dkMax)]*
+            sum += in.side[0][0][j+jr+radius+djrr*(k+kr+radius)]*
               smoother[i+1+radius+diam*(jr+radius+diam*(kr+radius))];
           }
 
@@ -107,7 +133,7 @@ static __global__ void smooth(
       if ((k+kr != -1) && (k+kr != dk-1))
         for (int jr = -radius; jr <= radius; jr++)
           if ((j+jr != -1) && (j+jr != dj-1)) {
-            sum += in.side[0][1][j+jr+djMax+3*djMax*(k+kr+dkMax)]*
+            sum += in.side[0][1][j+jr+radius+djrr*(k+kr+radius)]*
               smoother[di-1-i+radius+diam*(jr+radius+diam*(kr+radius))];
           }
 
@@ -126,6 +152,7 @@ void Jawfish::smoothSides()
   int smoothTag[smoothMsgs];
   MPI_Request smoothRecvReq[smoothMsgs], smoothSendReq[smoothMsgs];
 
+  const int radius = smootherRadius_;
   int tag = 133;
   int id = 0;
 
@@ -149,7 +176,7 @@ void Jawfish::smoothSides()
         }
       }
     }
-    const long sideBytes = 3*3*bytes;
+    const long sideBytes = (radius+dj_+radius)*(radius+dk_+radius)*sizeof(double);
     CHECK(cudaMalloc((void**)&smoothIn.side[0][0],sideBytes));
     CHECK(cudaMalloc((void**)&smoothIn.side[0][1],sideBytes));
     CHECK(cudaMemset(smoothIn.side[0][0],0,sideBytes));
@@ -175,7 +202,7 @@ void Jawfish::smoothSides()
         }
       }
     }
-    const long sideBytes = 3*3*bytes;
+    const long sideBytes = (radius+di_+radius)*(radius+dk_+radius)*sizeof(double);
     CHECK(cudaMalloc((void**)&smoothIn.side[1][0],sideBytes));
     CHECK(cudaMalloc((void**)&smoothIn.side[1][1],sideBytes));
     CHECK(cudaMemset(smoothIn.side[1][0],0,sideBytes));
@@ -201,7 +228,7 @@ void Jawfish::smoothSides()
         }
       }
     }
-    const long sideBytes = 3*3*bytes;
+    const long sideBytes = (radius+di_+radius)*(radius+dj_+radius)*sizeof(double);
     CHECK(cudaMalloc((void**)&smoothIn.side[2][0],sideBytes));
     CHECK(cudaMalloc((void**)&smoothIn.side[2][1],sideBytes));
     CHECK(cudaMemset(smoothIn.side[2][0],0,sideBytes));
@@ -227,13 +254,15 @@ void Jawfish::smoothSides()
 
   {
     constexpr dim3 block(32,4,2);
-    const dim3 grid((std::max(diMax_,djMax_)-1)/block.x+1,(std::max(djMax_,dkMax_)-1)/block.y+1,3);
-    ::copyFromBuf<<<grid,block>>>(diMax_,djMax_,dkMax_,smoothRecv,smoothIn);
+    const int np = smootherRadius_+std::max(diMax_,djMax_)+smootherRadius_;
+    const int nq = smootherRadius_+std::max(djMax_,dkMax_)+smootherRadius_;
+    const dim3 grid((np-1)/block.x+1,(nq-1)/block.y+1,3);
+    ::copyFromBuf<<<grid,block>>>(di_,dj_,dk_,diMax_,djMax_,dkMax_,smootherRadius_,smoothRecv,smoothIn);
   }
   {
     constexpr dim3 block(4,4,4);
     const dim3 grid((di_-1)/block.x+1,(dj_-1)/block.y+1,(dk_-1)/block.z+1);
-    ::smooth<<<grid,block>>>(di_,dj_,dk_,diMax_,djMax_,dkMax_,smootherRadius_,smoother_,smoothIn,dPhi_);
+    ::smooth<<<grid,block>>>(di_,dj_,dk_,smootherRadius_,smoother_,smoothIn,dPhi_);
   }
 
   MPI_Waitall(smoothMsgs,smoothSendReq,MPI_STATUSES_IGNORE);
