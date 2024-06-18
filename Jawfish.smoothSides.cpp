@@ -4,12 +4,11 @@
 #include <cassert>
 
 struct SmoothRecvBuffers { double *__restrict__ buf[3][2][3][3]; };
-struct SmoothSendBuffers { double *__restrict__ buf[3]; };
+struct SmoothSendBuffers { double *__restrict__ buf[3][3][3]; };
 struct SmoothSides { double *__restrict__ side[3][2]; };
 
 static __global__ void copyFromBuf(
   const int di, const int dj, const int dk,
-  const int diMax, const int djMax, const int dkMax,
   const int radius,
   SmoothRecvBuffers recv, SmoothSides out)
 {
@@ -19,27 +18,27 @@ static __global__ void copyFromBuf(
   const int dir = threadIdx.z;
 
   const int dp = (dim == 0) ? dj : di;
-  const int dpMax = (dim == 0) ? djMax : diMax;
-
   const int dq = (dim == 2) ? dj: dk;
-  const int dqMax = (dim == 2) ? djMax: dkMax;
 
-  int bp, pr;
+  int bp, dpr, pr;
   if (p < radius) {
     bp = 0;
-    pr = p+dpMax-radius;
+    dpr = radius;
+    pr = p;
   } else if (p < radius+dp) {
     bp = 1;
+    dpr = dp;
     pr = p-radius;
   } else if (p < radius+dp+radius) {
     bp = 2;
+    dpr = radius;
     pr = p-radius-dp;
   } else return;
 
   int bq, qr;
   if (q < radius) {
     bq = 0;
-    qr = q+dqMax-radius;
+    qr = q;
   } else if (q < radius+dq) {
     bq = 1;
     qr = q-radius;
@@ -48,26 +47,36 @@ static __global__ void copyFromBuf(
     qr = q-radius-dq;
   } else return;
 
-  out.side[dim][dir][p+(radius+dp+radius)*q] = recv.buf[dim][dir][bq][bp][pr+dpMax*qr];
+  out.side[dim][dir][p+(radius+dp+radius)*q] = recv.buf[dim][dir][bq][bp][pr+dpr*qr];
 }
 
 static __global__ void copyToBuf(
-  const int di, const int dj, const int dk,
-  const int diMax, const int djMax,
+  const int di, const int dj, const int dk, const int radius,
   const double *const in, const SmoothSendBuffers send)
 {
   const int p = threadIdx.x+blockIdx.x*blockDim.x;
   const int q = threadIdx.y+blockIdx.y*blockDim.y;
   const int dim = blockIdx.z;
 
-  if ((dim == 0) && (p < dj) && (q < dk)) {
-    send.buf[0][p+djMax*q] = in[di-1+di*(p+dj*q)];
-  }
-  else if ((dim == 1) && (p < di) && (q < dk)) {
-    send.buf[1][p+diMax*q] = in[p+di*(dj-1+dj*q)];
-  }
-  else if ((dim == 2) && (p < di) && (q < dj)) {
-    send.buf[2][p+diMax*q] = in[p+di*(q+dj*(dk-1))];
+  const int dp = (dim == 0) ? dj : di;
+  const int dq = (dim == 2) ? dj : dk;
+
+  if ((p >= dp) || (q >= dq)) return;
+
+  const double out = (dim == 0) ? in[di-1+di*(p+dj*q)] :
+    (dim == 1) ? in[p+di*(dj-1+dj*q)] :
+    /* dim == 2 */ in[p+di*(q+dj*(dk-1))];
+
+  for (int bq = 0; bq < 3; bq++) {
+    const int qb = bq ? q : q-dq+radius;
+    const int dqb = (bq == 1) ? dq : radius;
+    if ((qb < 0) || (qb >= dqb)) continue;
+    for (int bp = 0; bp < 3; bp++) {
+      const int pb = bp ? p : p-dp+radius;
+      const int dpb = (bp == 1) ? dp : radius;
+      if ((pb < 0) || (pb >= dpb)) continue;
+      send.buf[dim][bq][bp][pb+dpb*qb] = out;
+    }
   }
 }
 
@@ -157,14 +166,16 @@ void Jawfish::smoothSides()
   int id = 0;
 
   { // X
-    const int count = djMax_*dkMax_;
-    const long bytes = count*sizeof(double);
-    CHECK(cudaMalloc((void**)&smoothSend.buf[0],bytes));
-    CHECK(cudaMemset(smoothSend.buf[0],0,bytes));
-    for (int i = -1; i < 1; i++) {
-      for (int k = -1; k < 2; k++) {
-        for (int j = -1; j < 2; j++) {
-          smoothSendBuf[id] = smoothSend.buf[0];
+    for (int k = -1; k < 2; k++) {
+      const int countK = k ? smootherRadius_ : dk_;
+      for (int j = -1; j < 2; j++) {
+        const int countJ = j ? smootherRadius_ : dj_;
+        const int count = countJ*countK;
+        const long bytes = count*sizeof(double);
+        CHECK(cudaMalloc((void**)&smoothSend.buf[0][k+1][j+1],bytes));
+        CHECK(cudaMemset(smoothSend.buf[0][k+1][j+1],0,bytes));
+        for (int i = -1; i < 1; i++) {
+          smoothSendBuf[id] = smoothSend.buf[0][k+1][j+1];
           CHECK(cudaMalloc(&smoothRecvBuf[id],bytes));
           smoothRecv.buf[0][i+1][k+1][j+1] = smoothRecvBuf[id];
           CHECK(cudaMemset(smoothRecvBuf[id],0,bytes));
@@ -183,14 +194,16 @@ void Jawfish::smoothSides()
     CHECK(cudaMemset(smoothIn.side[0][1],0,sideBytes));
   }
   { // Y
-    const int count = diMax_*dkMax_;
-    const long bytes = count*sizeof(double);
-    CHECK(cudaMalloc((void**)&smoothSend.buf[1],bytes));
-    CHECK(cudaMemset(smoothSend.buf[1],0,bytes));
-    for (int j = -1; j < 1; j++) {
-      for (int k = -1; k < 2; k++) {
-        for (int i = -1; i < 2; i++) {
-          smoothSendBuf[id] = smoothSend.buf[1];
+    for (int k = -1; k < 2; k++) {
+      const int countK = k ? smootherRadius_ : dk_;
+      for (int i = -1; i < 2; i++) {
+        const int countI = i ? smootherRadius_ : di_;
+        const int count = countI*countK;
+        const long bytes = count*sizeof(double);
+        CHECK(cudaMalloc((void**)&smoothSend.buf[1][k+1][i+1],bytes));
+        CHECK(cudaMemset(smoothSend.buf[1][k+1][i+1],0,bytes));
+        for (int j = -1; j < 1; j++) {
+          smoothSendBuf[id] = smoothSend.buf[1][k+1][i+1];
           CHECK(cudaMalloc(&smoothRecvBuf[id],bytes));
           smoothRecv.buf[1][j+1][k+1][i+1] = smoothRecvBuf[id];
           CHECK(cudaMemset(smoothRecvBuf[id],0,bytes));
@@ -209,14 +222,16 @@ void Jawfish::smoothSides()
     CHECK(cudaMemset(smoothIn.side[1][1],0,sideBytes));
   }
   { // Z
-    const int count = diMax_*djMax_;
-    const long bytes = count*sizeof(double);
-    CHECK(cudaMalloc((void**)&smoothSend.buf[2],bytes));
-    CHECK(cudaMemset(smoothSend.buf[2],0,bytes));
-    for (int k = -1; k < 1; k++) {
-      for (int j = -1; j < 2; j++) {
-        for (int i = -1; i < 2; i++) {
-          smoothSendBuf[id] = smoothSend.buf[2];
+    for (int j = -1; j < 2; j++) {
+      const int countJ = j ? smootherRadius_ : dj_;
+      for (int i = -1; i < 2; i++) {
+        const int countI = i ? smootherRadius_ : di_;
+        const int count = countI*countJ;
+        const long bytes = count*sizeof(double);
+        CHECK(cudaMalloc((void**)&smoothSend.buf[2][j+1][i+1],bytes));
+        CHECK(cudaMemset(smoothSend.buf[2][j+1][i+1],0,bytes));
+        for (int k = -1; k < 1; k++) {
+          smoothSendBuf[id] = smoothSend.buf[2][j+1][i+1];
           CHECK(cudaMalloc(&smoothRecvBuf[id],bytes));
           smoothRecv.buf[2][k+1][j+1][i+1] = smoothRecvBuf[id];
           CHECK(cudaMemset(smoothRecvBuf[id],0,bytes));
@@ -243,7 +258,7 @@ void Jawfish::smoothSides()
   {
     constexpr dim3 block(32,8);
     const dim3 grid((std::max(di_,dj_)-1)/block.x+1,(std::max(dj_,dk_)-1)/block.y+1,3);
-    ::copyToBuf<<<grid,block>>>(di_,dj_,dk_,diMax_,djMax_,dRho_,smoothSend);
+    ::copyToBuf<<<grid,block>>>(di_,dj_,dk_,smootherRadius_,dRho_,smoothSend);
   }
 
   CHECK(cudaDeviceSynchronize());
@@ -254,10 +269,10 @@ void Jawfish::smoothSides()
 
   {
     constexpr dim3 block(32,4,2);
-    const int np = smootherRadius_+std::max(diMax_,djMax_)+smootherRadius_;
-    const int nq = smootherRadius_+std::max(djMax_,dkMax_)+smootherRadius_;
+    const int np = smootherRadius_+std::max(di_,dj_)+smootherRadius_;
+    const int nq = smootherRadius_+std::max(dj_,dk_)+smootherRadius_;
     const dim3 grid((np-1)/block.x+1,(nq-1)/block.y+1,3);
-    ::copyFromBuf<<<grid,block>>>(di_,dj_,dk_,diMax_,djMax_,dkMax_,smootherRadius_,smoothRecv,smoothIn);
+    ::copyFromBuf<<<grid,block>>>(di_,dj_,dk_,smootherRadius_,smoothRecv,smoothIn);
   }
   {
     constexpr dim3 block(4,4,4);
