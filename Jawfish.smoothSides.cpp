@@ -214,6 +214,7 @@ void Jawfish::smoothSides()
   const double one = 1.0;
   CHECK(cublasDaxpy(handle_,di_*dj_*dk_,&one,buf,1,dPhi_,1));
   CHECK(cudaDeviceSynchronize());
+#if 0
 
   constexpr int smoothMsgs = 3*3*2*3;
   SmoothRecvBuffers smoothRecv;
@@ -355,6 +356,7 @@ void Jawfish::smoothSides()
     printf("# diffMax %g\n",diffMax);
   }
   stop();
+#endif
 
   if (root) {
     CHECK(cudaFree(phi));

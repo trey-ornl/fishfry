@@ -147,6 +147,8 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   CHECK(cudaMalloc((void**)&lapSend_.buf[5],zBytes));
 
   CHECK(cudaEventCreate(&event_));
+  CHECK(cudaDeviceSynchronize());
+  testSmoothSides();
 }
 
 Jawfish::~Jawfish()

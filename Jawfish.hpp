@@ -83,6 +83,9 @@ class Jawfish {
     void setLaplacian(const double *in, double *out);
     void smoothSides();
 
+    void printMaxDiff(const char *msg, const double *a, const double *b) const;
+    void testSmoothSides();
+
     int neighbor(const int deltaI, const int deltaJ, const int deltaK) const
     {
       const int thatI = (idi_+deltaI+mi_)%mi_;
