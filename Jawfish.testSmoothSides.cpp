@@ -32,6 +32,7 @@ static __global__ void init(
         if (sideI || sideJ || sideK) {
           const double in = double(ig+ni*(jg+nj*kg));
           sum += in*smoother[ir+radius+diam*(jr+radius+diam*(kr+radius))];
+          //if ((idi == 0) && (idj == 0) && (idk == 0) && (i == 0) && (j == 0) && (k == 0)) printf("init %d %d %d %g %g\n",ir,jr,kr,in,smoother[ir+radius+diam*(jr+radius+diam*(kr+radius))]);
         }
       }
     }

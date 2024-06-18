@@ -110,41 +110,41 @@ static __global__ void smooth(
   const int diam = radius+radius+1;
   double sum = 0;
 
-  if (k <= radius)
-    for (int rj = -radius; rj <= radius; rj++)  
-      for (int ri = -radius; ri <= radius; ri++)
-        sum += in.side[2][0][i+ri+diMax+3*diMax*(j+rj+djMax)]*smoother[ri+radius+diam*(rj+radius+diam*(k+radius))];
+  if (k < radius)
+    for (int jr = -radius; jr <= radius; jr++)  
+      for (int ir = -radius; ir <= radius; ir++)
+        sum += in.side[2][0][i+ir+diMax+3*diMax*(j+jr+djMax)]*smoother[ir+radius+diam*(jr+radius+diam*(k+1+radius))];
 
-  if (k >= mydk-radius)
-    for (int rj = -radius; rj <= radius; rj++)  
-      for (int ri = -radius; ri <= radius; ri++)
-        sum += in.side[2][1][i+ri+diMax+3*diMax*(j+rj+djMax)]*smoother[ri+radius+diam*(rj+radius+diam*(mydk-k+radius))];
+  if (k+radius >= mydk-1)
+    for (int jr = -radius; jr <= radius; jr++)  
+      for (int ir = -radius; ir <= radius; ir++)
+        sum += in.side[2][1][i+ir+diMax+3*diMax*(j+jr+djMax)]*smoother[ir+radius+diam*(jr+radius+diam*(mydk-1-k+radius))];
 
-  if (j <= radius)
-    for (int rk = -radius; rk <= radius; rk++)  
-      if ((k+rk != 0) && (k+rk != mydk-1))
-        for (int ri = -radius; ri <= radius; ri++)
-          sum += in.side[1][0][i+ri+diMax+3*diMax*(k+rk+dkMax)]*smoother[ri+radius+diam*(j+radius+diam*(rk+radius))];
+  if (j < radius)
+    for (int kr = -radius; kr <= radius; kr++)  
+      if ((k+kr != -1) && (k+kr != mydk-1))
+        for (int ir = -radius; ir <= radius; ir++)
+          sum += in.side[1][0][i+ir+diMax+3*diMax*(k+kr+dkMax)]*smoother[ir+radius+diam*(j+1+radius+diam*(kr+radius))];
 
-  if (j >= mydj-radius)
-    for (int rk = -radius; rk <= radius; rk++)  
-      if ((k+rk != 0) && (k+rk != mydk-1))
-        for (int ri = -radius; ri <= radius; ri++)
-          sum += in.side[1][1][i+ri+diMax+3*diMax*(k+rk+dkMax)]*smoother[ri+radius+diam*(mydj-j+radius+diam*(rk+radius))];
+  if (j+radius >= mydj-1)
+    for (int kr = -radius; kr <= radius; kr++)  
+      if ((k+kr != -1) && (k+kr != mydk-1))
+        for (int ir = -radius; ir <= radius; ir++)
+          sum += in.side[1][1][i+ir+diMax+3*diMax*(k+kr+dkMax)]*smoother[ir+radius+diam*(mydj-1-j+radius+diam*(kr+radius))];
 
-  if (i <= radius)
-    for (int rk = -radius; rk <= radius; rk++)  
-      if ((k+rk != 0) && (k+rk != mydk-1))
-        for (int rj = -radius; rj <= radius; rj++)
-          if ((j+rj != 0) && (j+rj != mydj-1))
-            sum += in.side[0][0][j+rj+djMax+3*djMax*(k+rk+dkMax)]*smoother[i+radius+diam*(rj+radius+diam*(rk+radius))];
+  if (i < radius)
+    for (int kr = -radius; kr <= radius; kr++)  
+      if ((k+kr != -1) && (k+kr != mydk-1))
+        for (int jr = -radius; jr <= radius; jr++)
+          if ((j+jr != -1) && (j+jr != mydj-1))
+            sum += in.side[0][0][j+jr+djMax+3*djMax*(k+kr+dkMax)]*smoother[i+1+radius+diam*(jr+radius+diam*(kr+radius))];
 
-  if (i >= mydi-radius)
-    for (int rk = -radius; rk <= radius; rk++)  
-      if ((k+rk != 0) && (k+rk != mydk-1))
-        for (int rj = -radius; rj <= radius; rj++)
-          if ((j+rj != 0) && (j+rj != mydj-1))
-            sum += in.side[0][1][j+rj+djMax+3*djMax*(k+rk+dkMax)]*smoother[mydi-i+radius+diam*(rj+radius+diam*(rk+radius))];
+  if (i+radius >= mydi-1)
+    for (int kr = -radius; kr <= radius; kr++)  
+      if ((k+kr != -1) && (k+kr != mydk-1))
+        for (int jr = -radius; jr <= radius; jr++)
+          if ((j+jr != -1) && (j+jr != mydj-1))
+            sum += in.side[0][1][j+jr+djMax+3*djMax*(k+kr+dkMax)]*smoother[mydi-1-i+radius+diam*(jr+radius+diam*(kr+radius))];
 
   if (sum) inout[i+mydi*(j+mydj*k)] += sum;
 }
@@ -179,6 +179,7 @@ static __global__ void smooth(const int diMax, const int djMax, const int dkMax,
 
 void Jawfish::smoothSides()
 {
+#if 0
   const bool root = (idi_+idj_+idk_ == 0);
 
   const int count = diMax_*djMax_*dkMax_;
@@ -214,7 +215,7 @@ void Jawfish::smoothSides()
   const double one = 1.0;
   CHECK(cublasDaxpy(handle_,di_*dj_*dk_,&one,buf,1,dPhi_,1));
   CHECK(cudaDeviceSynchronize());
-#if 0
+#endif
 
   constexpr int smoothMsgs = 3*3*2*3;
   SmoothRecvBuffers smoothRecv;
@@ -332,12 +333,13 @@ void Jawfish::smoothSides()
   {
     constexpr dim3 block(4,4,4);
     const dim3 grid((di_-1)/block.x+1,(dj_-1)/block.y+1,(dk_-1)/block.z+1);
-    ::smooth<<<grid,block>>>(di_,dj_,dk_,diMax_,djMax_,dkMax_,smootherRadius_,smoother_,smoothIn,smoothOut);
+    ::smooth<<<grid,block>>>(di_,dj_,dk_,diMax_,djMax_,dkMax_,smootherRadius_,smoother_,smoothIn,dPhi_);
   }
 
   MPI_Waitall(smoothMsgs,smoothSendReq,MPI_STATUSES_IGNORE);
   CHECK(cudaDeviceSynchronize());
 
+#if 0
   if (root) {
     double diffMax = 0;
     const int kk = dk_-1;
@@ -356,7 +358,6 @@ void Jawfish::smoothSides()
     printf("# diffMax %g\n",diffMax);
   }
   stop();
-#endif
 
   if (root) {
     CHECK(cudaFree(phi));
@@ -364,4 +365,5 @@ void Jawfish::smoothSides()
     CHECK(cudaFree(bufAll));
   }
   CHECK(cudaFree(buf));
+#endif
 }
