@@ -135,7 +135,7 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
 
   // Z
   const int zCount = di_*dj_;
-  lapCount_[4] = lapCount_[5] = di_*dj_;
+  lapCount_[4] = lapCount_[5] = zCount;
   lapRank_[4] = neighbor(0,0,-1);
   lapRank_[5] = neighbor(0,0,1);
   const long zBytes = zCount*sizeof(double);

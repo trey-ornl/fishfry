@@ -1,6 +1,7 @@
 #include "Jawfish.hpp"
 
 #include <algorithm>
+#include <cassert>
 
 struct SmoothRecvBuffers { double *__restrict__ buf[3][2][3][3]; };
 struct SmoothSendBuffers { double *__restrict__ buf[3]; };
@@ -27,32 +28,8 @@ static __global__ void copyFromBuf(
   }
 }
 
-static __global__ void copyFromBuf(const int diMax, const int djMax, const int dkMax, const int mi, const int mj, const int ni, const int nj, const int nk, const double *const in, double *const __restrict__ out)
-{
-  const int i = threadIdx.x+blockIdx.x*blockDim.x;
-  const int j = threadIdx.y+blockIdx.y*blockDim.y;
-  const int k = threadIdx.z+blockIdx.z*blockDim.z;
-
-  if ((i >= ni) || (j >= nj) || (k >= nk)) return;
-
-  const int idi = i/diMax;
-  const int idj = j/djMax;
-  const int idk = k/dkMax;
-
-  const int li = i%diMax;
-  const int lj = j%djMax;
-  const int lk = k%dkMax;
-
-  const int mydi = std::min(diMax,ni-idi*diMax);
-  const int mydj = std::min(djMax,nj-idj*djMax);
-
-  const int global = (idi+mi*(idj+mj*idk))*diMax*djMax*dkMax;
-  const int local = li+mydi*(lj+mydj*lk);
-  out[i+ni*(j+nj*k)] = in[global+local];
-}
-
 static __global__ void copyToBuf(
-  const int mydi, const int mydj, const int mydk,
+  const int di, const int dj, const int dk,
   const int diMax, const int djMax,
   const double *const in, const SmoothSendBuffers send)
 {
@@ -60,43 +37,19 @@ static __global__ void copyToBuf(
   const int q = threadIdx.y+blockIdx.y*blockDim.y;
   const int dim = blockIdx.z;
 
-  if ((dim == 0) && (p < mydj) && (q < mydk)) {
-    send.buf[0][p+djMax*q] = in[mydi-1+mydi*(p+mydj*q)];
+  if ((dim == 0) && (p < dj) && (q < dk)) {
+    send.buf[0][p+djMax*q] = in[di-1+di*(p+dj*q)];
   }
-  else if ((dim == 1) && (p < mydi) && (q < mydk)) {
-    send.buf[1][p+diMax*q] = in[p+mydi*(mydj-1+mydj*q)];
+  else if ((dim == 1) && (p < di) && (q < dk)) {
+    send.buf[1][p+diMax*q] = in[p+di*(dj-1+dj*q)];
   }
-  else if ((dim == 2) && (p < mydi) && (q < mydj)) {
-    send.buf[2][p+diMax*q] = in[p+mydi*(q+mydj*(mydk-1))];
+  else if ((dim == 2) && (p < di) && (q < dj)) {
+    send.buf[2][p+diMax*q] = in[p+di*(q+dj*(dk-1))];
   }
-}
-
-static __global__ void copyToBuf(const int diMax, const int djMax, const int dkMax, const int mi, const int mj, const int ni, const int nj, const int nk, const double *const in, double *const __restrict__ out)
-{
-  const int i = threadIdx.x+blockIdx.x*blockDim.x;
-  const int j = threadIdx.y+blockIdx.y*blockDim.y;
-  const int k = threadIdx.z+blockIdx.z*blockDim.z;
-
-  if ((i >= ni) || (j >= nj) || (k >= nk)) return;
-
-  const int idi = i/diMax;
-  const int idj = j/djMax;
-  const int idk = k/dkMax;
-
-  const int li = i%diMax;
-  const int lj = j%djMax;
-  const int lk = k%dkMax;
-
-  const int mydi = std::min(diMax,ni-idi*diMax);
-  const int mydj = std::min(djMax,nj-idj*djMax);
-
-  const int global = (idi+mi*(idj+mj*idk))*diMax*djMax*dkMax;
-  const int local = li+mydi*(lj+mydj*lk);
-  out[global+local] = in[i+ni*(j+nj*k)]; 
 }
 
 static __global__ void smooth(
-  const int mydi, const int mydj, const int mydk,
+  const int di, const int dj, const int dk,
   const int diMax, const int djMax, const int dkMax,
   const int radius, const double *const smoother,
   const SmoothSides in, double *const __restrict__ inout)
@@ -105,118 +58,64 @@ static __global__ void smooth(
   const int j = threadIdx.y+blockIdx.y*blockDim.y;
   const int k = threadIdx.z+blockIdx.z*blockDim.z;
 
-  if ((i >= mydi) || (j >= mydj) || (k >= mydk)) return;
+  if ((i >= di) || (j >= dj) || (k >= dk)) return;
 
   const int diam = radius+radius+1;
   double sum = 0;
 
   if (k < radius)
     for (int jr = -radius; jr <= radius; jr++)  
-      for (int ir = -radius; ir <= radius; ir++)
-        sum += in.side[2][0][i+ir+diMax+3*diMax*(j+jr+djMax)]*smoother[ir+radius+diam*(jr+radius+diam*(k+1+radius))];
+      for (int ir = -radius; ir <= radius; ir++) {
+        sum += in.side[2][0][i+ir+diMax+3*diMax*(j+jr+djMax)]*
+          smoother[ir+radius+diam*(jr+radius+diam*(k+1+radius))];
+      }
 
-  if (k+radius >= mydk-1)
+  if (k+radius >= dk-1)
     for (int jr = -radius; jr <= radius; jr++)  
-      for (int ir = -radius; ir <= radius; ir++)
-        sum += in.side[2][1][i+ir+diMax+3*diMax*(j+jr+djMax)]*smoother[ir+radius+diam*(jr+radius+diam*(mydk-1-k+radius))];
+      for (int ir = -radius; ir <= radius; ir++) {
+        sum += in.side[2][1][i+ir+diMax+3*diMax*(j+jr+djMax)]*
+          smoother[ir+radius+diam*(jr+radius+diam*(dk-1-k+radius))];
+      }
 
   if (j < radius)
     for (int kr = -radius; kr <= radius; kr++)  
-      if ((k+kr != -1) && (k+kr != mydk-1))
-        for (int ir = -radius; ir <= radius; ir++)
-          sum += in.side[1][0][i+ir+diMax+3*diMax*(k+kr+dkMax)]*smoother[ir+radius+diam*(j+1+radius+diam*(kr+radius))];
+      if ((k+kr != -1) && (k+kr != dk-1))
+        for (int ir = -radius; ir <= radius; ir++) {
+          sum += in.side[1][0][i+ir+diMax+3*diMax*(k+kr+dkMax)]*
+            smoother[ir+radius+diam*(j+1+radius+diam*(kr+radius))];
+        }
 
-  if (j+radius >= mydj-1)
+  if (j+radius >= dj-1)
     for (int kr = -radius; kr <= radius; kr++)  
-      if ((k+kr != -1) && (k+kr != mydk-1))
-        for (int ir = -radius; ir <= radius; ir++)
-          sum += in.side[1][1][i+ir+diMax+3*diMax*(k+kr+dkMax)]*smoother[ir+radius+diam*(mydj-1-j+radius+diam*(kr+radius))];
+      if ((k+kr != -1) && (k+kr != dk-1))
+        for (int ir = -radius; ir <= radius; ir++) {
+          sum += in.side[1][1][i+ir+diMax+3*diMax*(k+kr+dkMax)]*
+            smoother[ir+radius+diam*(dj-1-j+radius+diam*(kr+radius))];
+        }
 
   if (i < radius)
     for (int kr = -radius; kr <= radius; kr++)  
-      if ((k+kr != -1) && (k+kr != mydk-1))
+      if ((k+kr != -1) && (k+kr != dk-1))
         for (int jr = -radius; jr <= radius; jr++)
-          if ((j+jr != -1) && (j+jr != mydj-1))
-            sum += in.side[0][0][j+jr+djMax+3*djMax*(k+kr+dkMax)]*smoother[i+1+radius+diam*(jr+radius+diam*(kr+radius))];
+          if ((j+jr != -1) && (j+jr != dj-1)) {
+            sum += in.side[0][0][j+jr+djMax+3*djMax*(k+kr+dkMax)]*
+              smoother[i+1+radius+diam*(jr+radius+diam*(kr+radius))];
+          }
 
-  if (i+radius >= mydi-1)
+  if (i+radius >= di-1)
     for (int kr = -radius; kr <= radius; kr++)  
-      if ((k+kr != -1) && (k+kr != mydk-1))
+      if ((k+kr != -1) && (k+kr != dk-1))
         for (int jr = -radius; jr <= radius; jr++)
-          if ((j+jr != -1) && (j+jr != mydj-1))
-            sum += in.side[0][1][j+jr+djMax+3*djMax*(k+kr+dkMax)]*smoother[mydi-1-i+radius+diam*(jr+radius+diam*(kr+radius))];
+          if ((j+jr != -1) && (j+jr != dj-1)) {
+            sum += in.side[0][1][j+jr+djMax+3*djMax*(k+kr+dkMax)]*
+              smoother[di-1-i+radius+diam*(jr+radius+diam*(kr+radius))];
+          }
 
-  if (sum) inout[i+mydi*(j+mydj*k)] += sum;
-}
-
-static __global__ void smooth(const int diMax, const int djMax, const int dkMax, const int ni, const int nj, const int nk, const int radius, const double *const smoother, const double *const in, double *const __restrict__ out)
-{
-  const int i = threadIdx.x+blockIdx.x*blockDim.x;
-  const int j = threadIdx.y+blockIdx.y*blockDim.y;
-  const int k = threadIdx.z+blockIdx.z*blockDim.z;
-
-  if ((i >= ni) || (j >= nj) || (k >= nk)) return;
-
-  const int diam = radius+radius+1;
-  double sum = 0;
-  for (int rk = -radius; rk <= radius; rk++) {
-    const int kk = (k+rk+nk)%nk;
-    const bool kSide = ((kk+1)%dkMax == 0);
-    for (int rj = -radius; rj <= radius; rj++) {
-      const int jj = (j+rj+nj)%nj;
-      const bool jSide = ((jj+1)%djMax == 0);
-      for (int ri = -radius; ri <= radius; ri++) {
-        const int ii = (i+ri+ni)%ni;
-        const bool iSide = ((ii+1)%diMax == 0);
-        if (kSide || jSide || iSide) {
-          sum += in[ii+ni*(jj+nj*kk)]*smoother[ri+radius+diam*(rj+radius+diam*(rk+radius))];
-        }
-      }
-    }
-  }
-  out[i+ni*(j+nj*k)] = sum;
+  if (sum) inout[i+di*(j+dj*k)] += sum;
 }
 
 void Jawfish::smoothSides()
 {
-#if 0
-  const bool root = (idi_+idj_+idk_ == 0);
-
-  const int count = diMax_*djMax_*dkMax_;
-  const long countAll = long(mi_)*long(mj_)*long(mk_)*long(count);
-
-  double *smoothOut = nullptr;
-  CHECK(cudaMalloc(&smoothOut,count*sizeof(double)));
-  CHECK(cudaMemset(smoothOut,0,count*sizeof(double)));
-
-  double *buf = nullptr;
-  double *bufAll = nullptr;
-  CHECK(cudaMalloc(&buf,count*sizeof(double)));
-  if (root) CHECK(cudaMalloc(&bufAll,countAll*sizeof(double)));
-  CHECK(cudaMemcpy(buf,dRho_,di_*dj_*dk_*sizeof(double),cudaMemcpyDeviceToDevice));
-  CHECK(cudaDeviceSynchronize());
-  MPI_Gather(buf,count,MPI_DOUBLE,bufAll,count,MPI_DOUBLE,0,MPI_COMM_WORLD);
-  double *rho = nullptr;
-  double *phi = nullptr;
-  if (root) {
-    const long bytes = long(ni_)*long(nj_)*long(nk_)*sizeof(double);
-    CHECK(cudaMalloc(&rho,bytes));
-    CHECK(cudaMalloc(&phi,bytes));
-    CHECK(cudaMemset(rho,0,bytes));
-    CHECK(cudaMemset(phi,0,bytes));
-    const dim3 block(4,4,4);
-    const dim3 grid((ni_-1)/block.x+1,(nj_-1)/block.y+1,(nk_-1)/block.z+1);
-    ::copyFromBuf<<<grid,block>>>(diMax_,djMax_,dkMax_,mi_,mj_,ni_,nj_,nk_,bufAll,rho);
-    ::smooth<<<grid,block>>>(diMax_,djMax_,dkMax_,ni_,nj_,nk_,smootherRadius_,smoother_,rho,phi);
-    ::copyToBuf<<<grid,block>>>(diMax_,djMax_,dkMax_,mi_,mj_,ni_,nj_,nk_,phi,bufAll);
-    CHECK(cudaDeviceSynchronize());
-  }
-  MPI_Scatter(bufAll,count,MPI_DOUBLE,buf,count,MPI_DOUBLE,0,MPI_COMM_WORLD);
-  const double one = 1.0;
-  CHECK(cublasDaxpy(handle_,di_*dj_*dk_,&one,buf,1,dPhi_,1));
-  CHECK(cudaDeviceSynchronize());
-#endif
-
   constexpr int smoothMsgs = 3*3*2*3;
   SmoothRecvBuffers smoothRecv;
   double *smoothRecvBuf[smoothMsgs];
@@ -307,6 +206,7 @@ void Jawfish::smoothSides()
     CHECK(cudaMalloc((void**)&smoothIn.side[2][1],sideBytes));
     CHECK(cudaMemset(smoothIn.side[2][0],0,sideBytes));
     CHECK(cudaMemset(smoothIn.side[2][1],0,sideBytes));
+    CHECK(cudaDeviceSynchronize());
   }
   assert(id == smoothMsgs);
 
@@ -338,32 +238,4 @@ void Jawfish::smoothSides()
 
   MPI_Waitall(smoothMsgs,smoothSendReq,MPI_STATUSES_IGNORE);
   CHECK(cudaDeviceSynchronize());
-
-#if 0
-  if (root) {
-    double diffMax = 0;
-    const int kk = dk_-1;
-    for (int j = 0; j < 3*djMax_; j++) {
-      const int jj = (j+djMax_)%nj_;
-      for (int i = 0; i < 3*diMax_; i++) {
-        const int ii = (i+diMax_)%ni_;
-        const double rhoA = rho[ii+ni_*(jj+nj_*kk)];
-        //const double rhoB = smoothRecv.buf[0][0][0][1][j+djMax_*k];
-        const double rhoB = smoothIn.side[2][1][i+3*diMax_*j];
-        const double diff = std::abs(rhoA-rhoB);
-        printf("%d %d %g %g %g\n",i,j,rhoA,rhoB,diff);
-        diffMax = std::max(diff,diffMax);
-      }
-    }
-    printf("# diffMax %g\n",diffMax);
-  }
-  stop();
-
-  if (root) {
-    CHECK(cudaFree(phi));
-    CHECK(cudaFree(rho));
-    CHECK(cudaFree(bufAll));
-  }
-  CHECK(cudaFree(buf));
-#endif
 }
