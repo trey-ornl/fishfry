@@ -307,7 +307,7 @@ void Jawfish::smoothSides()
   {
     constexpr dim3 block(4,4,4);
     const dim3 grid((di_-1)/block.x+1,(dj_-1)/block.y+1,(dk_-1)/block.z+1);
-    ::smooth<<<grid,block>>>(di_,dj_,dk_,smootherRadius_,smootherX_,smoothIn,dPhi_);
+    ::smooth<<<grid,block>>>(di_,dj_,dk_,smootherRadius_,smoother_,smoothIn,dPhi_);
   }
 
   MPI_Waitall(smoothMsgs,smoothSendReq,MPI_STATUSES_IGNORE);

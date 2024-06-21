@@ -59,7 +59,7 @@ void Jawfish::testSmoothSides()
   CHECK(cudaMemset(goal,0,bytes_));
   constexpr dim3 block(4,4,4);
   const dim3 grid((di_-1)/block.x+1,(dj_-1)/block.y+1,(dk_-1)/block.z+1);
-  ::init<<<grid,block>>>(di_,dj_,dk_,oi_,oj_,ok_,ni_,nj_,nk_,smootherRadius_,smootherX_,goal,dRho_);
+  ::init<<<grid,block>>>(di_,dj_,dk_,oi_,oj_,ok_,ni_,nj_,nk_,smootherRadius_,smoother_,goal,dRho_);
   smoothSides();
   printMaxDiff("# testSmoothSides dPhi",goal,dPhi_);
   stop();

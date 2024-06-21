@@ -72,7 +72,6 @@ class Jawfish {
     double scaleDST_;
     double si_,sj_,sk_;
     double *smoother_;
-    double *smootherX_;
     int smootherIters_;
     int smootherRadius_;
 
@@ -80,7 +79,6 @@ class Jawfish {
     void addLocalDST();
     void diffLaplacian(const double *goal);
     void initSmoother();
-    void initSmootherX();
     void plot(const double *density, const bool stop = true) const;
     void setLaplacian(const double *in, double *out);
     void smoothSides();

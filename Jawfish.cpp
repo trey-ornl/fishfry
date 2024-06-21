@@ -88,7 +88,6 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   CHECK(cufftPlanMany(&planK_,1,&dk2,0,1,dk2,0,1,dk2+2,CUFFT_D2Z,di_*dj_));
 
   initSmoother();
-  initSmootherX();
 
   const char *const jawfishEps = getenv("JAWFISH_EPS");
   if (jawfishEps) sscanf(jawfishEps,"%lf",&eps_);
@@ -164,9 +163,6 @@ Jawfish::~Jawfish()
     CHECK(cudaFree(lapRecv_.buf[i]));
     lapRecv_.buf[i] = nullptr;
   }
-
-  CHECK(cudaFree(smootherX_));
-  smootherX_ = nullptr;
 
   CHECK(cudaFree(smoother_));
   smoother_ = nullptr;
