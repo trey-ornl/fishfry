@@ -14,24 +14,27 @@ static __global__ void init(
 
   if ((i >= di) || (j >= dj) || (k >= dk)) return;
 
-  const int diam = radius+radius+1;
+  const int ns = radius+1;
   double sum = 0;
   for (int kr = -radius; kr <= radius; kr++) {
+    const int ks = std::abs(kr);
     const int kl = k+kr;
     const bool sideK = (kl+1 == 0) || (kl+1 == dk);
     const int kg = (k+kr+ok+nk)%nk;
     for (int jr = -radius; jr <= radius; jr++) {
+      const int js = std::abs(jr);
       const int jl = j+jr;
       const bool sideJ = (jl+1 == 0) || (jl+1 == dj);
       const int jg = (j+jr+oj+nj)%nj;
       for (int ir = -radius; ir <= radius; ir++) {
+        const int is = std::abs(ir);
         const int il = i+ir;
         const bool sideI = (il+1 == 0) || (il+1 == di);
         const int ig = (i+ir+oi+ni)%ni;
         if (sideI || sideJ || sideK) {
           const double in = double(1+ig+ni*(jg+nj*kg));
           assert(in);
-          sum += in*smoother[ir+radius+diam*(jr+radius+diam*(kr+radius))];
+          sum += in*smoother[is+ns*(js+ns*ks)];
         }
       }
     }
@@ -56,7 +59,7 @@ void Jawfish::testSmoothSides()
   CHECK(cudaMemset(goal,0,bytes_));
   constexpr dim3 block(4,4,4);
   const dim3 grid((di_-1)/block.x+1,(dj_-1)/block.y+1,(dk_-1)/block.z+1);
-  ::init<<<grid,block>>>(di_,dj_,dk_,oi_,oj_,ok_,ni_,nj_,nk_,smootherRadius_,smoother_,goal,dRho_);
+  ::init<<<grid,block>>>(di_,dj_,dk_,oi_,oj_,ok_,ni_,nj_,nk_,smootherRadius_,smootherX_,goal,dRho_);
   smoothSides();
   printMaxDiff("# testSmoothSides dPhi",goal,dPhi_);
   stop();
