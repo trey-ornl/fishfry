@@ -4,6 +4,20 @@
 #include <cassert>
 #include <cstdlib>
 
+__global__ static void overwrite(const int n, const double *const in, double *const __restrict__ out)
+{
+  const int i = threadIdx.x+blockDim.x*blockIdx.x;
+  const int j = threadIdx.y+blockDim.y*blockIdx.y;
+  const int k = threadIdx.z+blockDim.z*blockIdx.z;
+
+  if ((i < n) && (j < n) && (k < n)) {
+
+    const int radius = n-1;
+    const int nin = n+radius;
+    out[i+n*(j+n*k)] = in[i+radius+nin*(j+radius+nin*(k+radius))];
+  }
+}
+
 __global__ static void setA(const int n, double denomX, double denomY, double denomZ, double *const __restrict__ a)
 {
   const int i = threadIdx.x+blockDim.x*blockIdx.x;
@@ -85,6 +99,10 @@ void Jawfish::initSmootherX()
   CHECK(cublasDgels(handle_,CUBLAS_OP_N,n1n1n1,nnn,1,a,n1n1n1,b,n1n1n1,&infoH,info));
   assert(infoH == 0);
   CHECK(cudaMemcpy(smootherX_,b,smootherBytes,cudaMemcpyDeviceToDevice));
+
+  const dim3 grid((n-1)/block.x+1,(n-1)/block.y+1,(n-1)/block.z+1);
+  ::overwrite<<<grid,block>>>(n,smoother_,smootherX_);
+
   CHECK(cudaMemset(a,0,aBytes));
   setA<<<grid1,block>>>(n,denomX_,denomY_,denomZ_,a);
   const double alpha = 1.0;
@@ -106,5 +124,4 @@ void Jawfish::initSmootherX()
   CHECK(cudaFree(info));
   CHECK(cudaFree(b));
   CHECK(cudaFree(a));
-  stop();
 }

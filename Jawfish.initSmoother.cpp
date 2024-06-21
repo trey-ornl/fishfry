@@ -90,7 +90,7 @@ void Jawfish::initSmoother()
     double bMax = 0;
     CHECK(cudaMemcpy(&bMax,b+iMax-1,sizeof(bMax),cudaMemcpyDeviceToHost));
     fprintf(stderr,"# smoother %d^3, iters %d, max error %g\n",n,smootherIters_,bMax);
-    for (int i = smootherRadius_; i < n; i++) printf("%d %g %g\n",i-smootherRadius_,smoother_[i+n*(i+n*i)],b[i+np2*(i+np2*i)]);
+    for (int i = smootherRadius_; i < n; i++) printf("%d %g %g\n",i-smootherRadius_,smoother_[i+n*(i+n*i)],b[i+1+np2*(i+1+np2*(i+1))]);
     printf("\n");
     fflush(stdout);
   }

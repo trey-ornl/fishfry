@@ -91,60 +91,90 @@ static __global__ void smooth(
 
   if ((i >= di) || (j >= dj) || (k >= dk)) return;
 
-  const int diam = radius+radius+1;
+  const int ns = radius+1;
   double sum = 0;
 
   const int dirr = radius+di+radius;
 
-  if (k < radius)
-    for (int jr = -radius; jr <= radius; jr++)  
+  if (k < radius) {
+    for (int jr = -radius; jr <= radius; jr++) {
+      const int js = std::abs(jr);
       for (int ir = -radius; ir <= radius; ir++) {
+        const int is = std::abs(ir);
         sum += in.side[2][0][i+ir+radius+dirr*(j+jr+radius)]*
-          smoother[ir+radius+diam*(jr+radius+diam*(k+1+radius))];
+          smoother[is+ns*(js+ns*(k+1))];
       }
+    }
+  }
 
-  if (k+radius >= dk-1)
-    for (int jr = -radius; jr <= radius; jr++)  
+  if (k+radius >= dk-1) {
+    for (int jr = -radius; jr <= radius; jr++) {
+      const int js = std::abs(jr);
       for (int ir = -radius; ir <= radius; ir++) {
+        const int is = std::abs(ir);
         sum += in.side[2][1][i+ir+radius+dirr*(j+jr+radius)]*
-          smoother[ir+radius+diam*(jr+radius+diam*(dk-1-k+radius))];
+          smoother[is+ns*(js+ns*(dk-1-k))];
       }
+    }
+  }
 
-  if (j < radius)
-    for (int kr = -radius; kr <= radius; kr++)  
-      if ((k+kr != -1) && (k+kr != dk-1))
+  if (j < radius) {
+    for (int kr = -radius; kr <= radius; kr++) {
+      if ((k+kr != -1) && (k+kr != dk-1)) {
+        const int ks = std::abs(kr);
         for (int ir = -radius; ir <= radius; ir++) {
+          const int is = std::abs(ir);
           sum += in.side[1][0][i+ir+radius+dirr*(k+kr+radius)]*
-            smoother[ir+radius+diam*(j+1+radius+diam*(kr+radius))];
+            smoother[is+ns*(j+1+ns*(ks))];
         }
+      }
+    }
+  }
 
-  if (j+radius >= dj-1)
-    for (int kr = -radius; kr <= radius; kr++)  
-      if ((k+kr != -1) && (k+kr != dk-1))
+  if (j+radius >= dj-1) {
+    for (int kr = -radius; kr <= radius; kr++) {
+      if ((k+kr != -1) && (k+kr != dk-1)) {
+        const int ks = std::abs(kr);
         for (int ir = -radius; ir <= radius; ir++) {
+          const int is = std::abs(ir);
           sum += in.side[1][1][i+ir+radius+dirr*(k+kr+radius)]*
-            smoother[ir+radius+diam*(dj-1-j+radius+diam*(kr+radius))];
+            smoother[is+ns*(dj-1-j+ns*(ks))];
         }
+      }
+    }
+  }
 
   const int djrr = radius+dj+radius;
 
-  if (i < radius)
-    for (int kr = -radius; kr <= radius; kr++)  
-      if ((k+kr != -1) && (k+kr != dk-1))
-        for (int jr = -radius; jr <= radius; jr++)
+  if (i < radius) {
+    for (int kr = -radius; kr <= radius; kr++) {
+      if ((k+kr != -1) && (k+kr != dk-1)) {
+        const int ks = std::abs(kr);
+        for (int jr = -radius; jr <= radius; jr++) {
           if ((j+jr != -1) && (j+jr != dj-1)) {
+            const int js = std::abs(jr);
             sum += in.side[0][0][j+jr+radius+djrr*(k+kr+radius)]*
-              smoother[i+1+radius+diam*(jr+radius+diam*(kr+radius))];
+              smoother[i+1+ns*(js+ns*(ks))];
           }
+        }
+      }
+    }
+  }
 
-  if (i+radius >= di-1)
-    for (int kr = -radius; kr <= radius; kr++)  
-      if ((k+kr != -1) && (k+kr != dk-1))
-        for (int jr = -radius; jr <= radius; jr++)
+  if (i+radius >= di-1) {
+    for (int kr = -radius; kr <= radius; kr++) {
+      if ((k+kr != -1) && (k+kr != dk-1)) {
+        const int ks = std::abs(kr);
+        for (int jr = -radius; jr <= radius; jr++) {
           if ((j+jr != -1) && (j+jr != dj-1)) {
+            const int js = std::abs(jr);
             sum += in.side[0][1][j+jr+radius+djrr*(k+kr+radius)]*
-              smoother[di-1-i+radius+diam*(jr+radius+diam*(kr+radius))];
+              smoother[di-1-i+ns*(js+ns*(ks))];
           }
+        }
+      }
+    }
+  }
 
   if (sum) inout[i+di*(j+dj*k)] += sum;
 }
@@ -277,7 +307,7 @@ void Jawfish::smoothSides()
   {
     constexpr dim3 block(4,4,4);
     const dim3 grid((di_-1)/block.x+1,(dj_-1)/block.y+1,(dk_-1)/block.z+1);
-    ::smooth<<<grid,block>>>(di_,dj_,dk_,smootherRadius_,smoother_,smoothIn,dPhi_);
+    ::smooth<<<grid,block>>>(di_,dj_,dk_,smootherRadius_,smootherX_,smoothIn,dPhi_);
   }
 
   MPI_Waitall(smoothMsgs,smoothSendReq,MPI_STATUSES_IGNORE);
