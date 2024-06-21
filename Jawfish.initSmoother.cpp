@@ -81,16 +81,19 @@ void Jawfish::initSmoother()
   const double alpha = 1.0;
   const double beta = 0.0;
   CHECK(cublasDgemv(handle_,CUBLAS_OP_N,np23,n3,&alpha,a,np23,smoother_,1,&beta,b,1));
-  CHECK(cublasDgemv(handle_,CUBLAS_OP_N,np23,n3,&alpha,a,np23,smoother_,1,&beta,b,1));
   subtract<<<1,1>>>(&b[middle],1.0);
   int iMax = -1;
   CHECK(cublasIdamax(handle_,np23,b,1,&iMax)); // first index is 1
   CHECK(cudaDeviceSynchronize());
   assert(iMax > 0);
-
-  if (idi_+idj_+idk_ == 0) fprintf(stderr,"# smoother %d^3, iters %d, max error %g\n",n,smootherIters_,b[iMax-1]);
-
-  CHECK(cudaDeviceSynchronize());
+  if (idi_+idj_+idk_ == 0) {
+    double bMax = 0;
+    CHECK(cudaMemcpy(&bMax,b+iMax-1,sizeof(bMax),cudaMemcpyDeviceToHost));
+    fprintf(stderr,"# smoother %d^3, iters %d, max error %g\n",n,smootherIters_,bMax);
+    for (int i = smootherRadius_; i < n; i++) printf("%d %g %g\n",i-smootherRadius_,smoother_[i+n*(i+n*i)],b[i+np2*(i+np2*i)]);
+    printf("\n");
+    fflush(stdout);
+  }
   CHECK(cudaFree(info));
   CHECK(cudaFree(b));
   CHECK(cudaFree(a));
