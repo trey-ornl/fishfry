@@ -20,6 +20,7 @@
 #define cublasCreate hipblasCreate
 #define cublasDasum hipblasDasum
 #define cublasDaxpy hipblasDaxpy
+#define cublasDdot hipblasDdot
 #define cublasDestroy hipblasDestroy
 #define cublasDgels hipblasDgels
 #define cublasDgemv hipblasDgemv
