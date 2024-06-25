@@ -5,28 +5,14 @@
 #include <cfloat>
 #include <cstdlib>
 
-__global__ static void guess(const int n, const double denomX, const double denomY, const double denomZ, const double denomXYZ, const double *const in, double *const __restrict__ out)
+__global__ static void dropEnds(const int n, const double *const in, double *const __restrict__ out)
 {
   const int i = threadIdx.x+blockDim.x*blockIdx.x;
   const int j = threadIdx.y+blockDim.y*blockIdx.y;
   const int k = threadIdx.z+blockDim.z*blockIdx.z;
   const int n1 = n+1;
 
-  if ((i < n) && (j < n) && (k < n)) {
-
-    const double in0 = in[i+n1*(j+n1*k)];
-
-    const double inim = (i > 0) ? in[i-1+n1*(j+n1*k)] : in[1+n1*(j+n1*k)];
-    const double inip = in[i+1+n1*(j+n1*k)];
-
-    const double injm = (j > 0) ? in[i+n1*(j-1+n1*k)] : in[i+n1*(1+n1*k)];
-    const double injp = in[i+n1*(j+1+n1*k)];
-
-    const double inkm = (k > 0) ? in[i+n1*(j+n1*(k-1))] : in[i+n1*(j+n1*1)];
-    const double inkp = in[i+n1*(j+n1*(k+1))];
-
-    out[i+n*(j+n*k)] = in0; //denomXYZ*(denomX*(inim+inip)+denomY*(injm+injp)+denomZ*(inkm+inkp)-2.0*in0*(denomX+denomY+denomZ));
-  }
+  if ((i < n) && (j < n) && (k < n)) out[i+n*(j+n*k)] = in[i+n1*(j+n1*k)];
 }
 
 __global__ static void matmul(const int n, const double denomX, const double denomY, const double denomZ, const double *const in, double *const __restrict__ out)
@@ -143,9 +129,6 @@ void Jawfish::initSmoother()
     double *s = nullptr;
     CHECK(cudaMalloc(&s,rBytes));
     CHECK(cudaMemset(s,0,rBytes));
-    CHECK(cudaDeviceSynchronize());
-
-    const double denomXYZ = 1.0/(6.0*(denomX_*denomX_+denomY_*denomY_+denomZ_*denomZ_)+8.0*(denomX_*denomY_+denomX_*denomZ_+denomY_*denomZ_));
 
     constexpr dim3 block(4,4,4);
     const dim3 grid((n-1)/block.x+1,(n-1)/block.y+1,(n-1)/block.z+1);
@@ -154,28 +137,28 @@ void Jawfish::initSmoother()
     for (int iter = 0; iter < nnn; iter++) {
       ::matmul<<<grid1,block>>>(n,denomX_,denomY_,denomZ_,smoother,r);
       ::subtract<<<1,1>>>(r,1.0);
-      ::guess<<<grid,block>>>(n,denomX_,denomY_,denomZ_,denomXYZ,r,b);
+      ::dropEnds<<<grid,block>>>(n,r,b);
       ::matmul<<<grid1,block>>>(n,denomX_,denomY_,denomZ_,b,s);
-      CHECK(cudaDeviceSynchronize());
       double rs = 0;
       CHECK(cublasDdot(handle_,n1n1n1,r,1,s,1,&rs));
       double ss = 0;
       CHECK(cublasDdot(handle_,n1n1n1,s,1,s,1,&ss));
       const double alpha = -rs/ss;
       CHECK(cublasDaxpy(handle_,nnn,&alpha,b,1,smoother,1));
-      CHECK(cudaDeviceSynchronize());
       if (idi_+idj_+idk_ == 0) {
-        printf("# %d rs %g ss %g alpha %g dss %g\n",iter,rs,ss,alpha,std::abs(ss-ssLast)/(ss+ssLast));
+        fprintf(stderr,"# %d rs %g ss %g alpha %g dss %g\n",iter,rs,ss,alpha,std::abs(ss-ssLast)/(ss+ssLast));
       }
       if (std::abs(ss-ssLast) < (ss+ssLast)*FLT_EPSILON) break;
       ssLast = ss;
     }
     ::matmul<<<grid1,block>>>(n,denomX_,denomY_,denomZ_,smoother,r);
+    int irMax = 0;
+    CHECK(cublasIdamax(handle_,n1n1n1-1,r+1,1,&irMax));
     CHECK(cudaDeviceSynchronize());
     if (idi_+idj_+idk_ == 0) {
-      for (int i = 0; i < n; i++) printf("%d %g %g\n",i,smoother[i],r[i]);
-      printf("%g %g\n",2*smoother[1]*denomX_+2*smoother[n]*denomY_+2*smoother[n*n]*denomZ_-2*smoother[0]*(denomX_+denomY_+denomZ_),r[0]);
-      printf("%g %g\n",(smoother[0]-2.0*smoother[1]+smoother[2])*denomX_+(2*smoother[1+n]-2*smoother[1])*denomY_+(2*smoother[1+n*n]-2*smoother[1])*denomZ_,r[1]);
+      for (int i = 0; i < n; i++) printf("%d %g %g %g %g\n",i,smoother[i],r[i],smoother[i+n*(i+n*i)],r[i+n1*(i+n1*i)]);
+      printf("%d 0 %g 0 0\n",n,r[n]);
+      printf("# r[%d] = %g\n",irMax,r[irMax]);
     }
     stop();
   }
