@@ -64,6 +64,7 @@
 #define cufftExecZ2D hipfftExecZ2D
 #define cufftExecZ2Z hipfftExecZ2Z
 #define cufftHandle hipfftHandle
+#define cufftPlan3d hipfftPlan3d
 #define cufftPlanMany hipfftPlanMany
 
 static void __attribute__((unused)) check(const hipfftResult err, const char *const file, const int line)

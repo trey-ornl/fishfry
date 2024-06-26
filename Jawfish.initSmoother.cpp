@@ -5,56 +5,57 @@
 #include <cfloat>
 #include <cstdlib>
 
-__global__ static void dropEnds(const int n, const double *const in, double *const __restrict__ out)
+__global__ static void flatten(const int m, const double *const in, double *const __restrict out)
 {
   const int i = threadIdx.x+blockDim.x*blockIdx.x;
   const int j = threadIdx.y+blockDim.y*blockIdx.y;
   const int k = threadIdx.z+blockDim.z*blockIdx.z;
-  const int n1 = n+1;
 
-  if ((i < n) && (j < n) && (k < n)) out[i+n*(j+n*k)] = in[i+n1*(j+n1*k)];
-}
+  if ((i >= m) || (j >= m) || (k >= m)) return;
 
-__global__ static void matmul(const int n, const double denomX, const double denomY, const double denomZ, const double *const in, double *const __restrict__ out)
-{
-  const int i = threadIdx.x+blockDim.x*blockIdx.x;
-  const int j = threadIdx.y+blockDim.y*blockIdx.y;
-  const int k = threadIdx.z+blockDim.z*blockIdx.z;
-  const int n1 = n+1;
-
-  if ((i < n1) && (j < n1) && (k < n1)) {
-
-    const double in0 = ((i < n) && (j < n) && (k < n)) ? in[i+n*(j+n*k)] : 0;
-    double sum = -2.0*in0*(denomX+denomY+denomZ);
-
-    const double inim = ((j >= n) || (k >= n)) ? 0 : ((i > 0) ? in[i-1+n*(j+n*k)] : in[1+n*(j+n*k)]);
-    const double inip = ((i+1 < n) && (j < n) && (k < n)) ? in[i+1+n*(j+n*k)] : 0;
-    sum += denomX*(inim+inip);
-
-    const double injm = ((i >= n) || (k >= n)) ? 0 : ((j > 0) ? in[i+n*(j-1+n*k)] : in[i+n*(1+n*k)]);
-    const double injp = ((i < n) && (j+1 < n) && (k < n)) ? in[i+n*(j+1+n*k)] : 0;
-    sum += denomY*(injm+injp);
-
-    const double inkm = ((i >= n) || (j >= n)) ? 0 : ((k > 0) ? in[i+n*(j+n*(k-1))] : in[i+n*(j+n*1)]);
-    const double inkp = ((i < n) && (j < n) && (k+1 < n)) ? in[i+n*(j+n*(k+1))] : 0;
-    sum += denomZ*(inkm+inkp);
-
-    out[i+n1*(j+n1*k)] = sum;
+  if ((i == 0) || (j == 0) || (k == 0)) {
+    out[i+m*(j+m*k)] = -in[i+m*(j+m*k)];
+    return;
   }
+
+  const double fi = (in[0+m*(j+m*k)]*double(i-1)*double(i-m+1)+in[1+m*(j+m*k)]*double(i)*double(m-i))/double(m-1);
+  const double fj = (in[i+m*(0+m*k)]*double(j-1)*double(j-m+1)+in[i+m*(1+m*k)]*double(j)*double(m-j))/double(m-1);
+  const double fk = (in[i+m*(j+m*0)]*double(k-1)*double(k-m+1)+in[i+m*(j+m*1)]*double(k)*double(m-k))/double(m-1);
+
+  const double dii = double(i)*double(m-i);
+  const double djj = double(j)*double(m-j);
+  const double dkk = double(k)*double(m-k);
+
+  const double dij = dii*djj;
+  const double dik = dii*dkk;
+  const double djk = djj*dkk;
+  const double denom = dij+dik+djk;
+
+  out[i+m*(j+m*k)] = -(fi*djk+fj*dik+fk*dij)/denom;
 }
 
+__device__ static inline double sqr(const double x) { return x*x; }
 
-__global__ static void overwrite(const int n, const double *const in, double *const __restrict__ out)
+__global__ static void solve(const int m, double denomX, double denomY, double denomZ, cufftDoubleComplex *const __restrict__ z)
 {
   const int i = threadIdx.x+blockDim.x*blockIdx.x;
   const int j = threadIdx.y+blockDim.y*blockIdx.y;
   const int k = threadIdx.z+blockDim.z*blockIdx.z;
 
-  if ((i < n) && (j < n) && (k < n)) {
-
-    const int radius = n-1;
-    const int nin = n+radius;
-    out[i+n*(j+n*k)] = in[i+radius+nin*(j+radius+nin*(k+radius))];
+  const int mh = m/2+1;
+  if ((i < mh) && (j < m) && (k < m)) {
+    const double s = M_PI/double(m);
+    const int ijk = i+mh*(j+m*k);
+    if (i || j || k) {
+      const double i2 = sqr(2.0*sin(double(i)*s)*denomX);
+      const double j2 = sqr(2.0*sin(double(min(j,m-j))*s)*denomY);
+      const double k2 = sqr(2.0*sin(double(min(k,m-k))*s)*denomZ);
+      const double d = -1.0/(i2+j2+k2);
+      const cufftDoubleComplex zijk(d*z[ijk].x,d*z[ijk].y);
+      z[ijk] = zijk;
+    } else {
+      z[ijk] = cufftDoubleComplex(0);
+    }
   }
 }
 
@@ -111,57 +112,53 @@ void Jawfish::initSmoother()
   const int n1 = n+1;
   const int nnn = n*n*n;
   const int n1n1n1 = n1*n1*n1;
-  
-  const long smootherBytes = long(nnn)*sizeof(double);
-  CHECK(cudaMalloc(&smoother_,smootherBytes));
 
   if (true) {
-    double *smoother = nullptr;
-    CHECK(cudaMalloc(&smoother,smootherBytes));
-    CHECK(cudaMemset(smoother,0,smootherBytes));
-    double *b = nullptr;
-    CHECK(cudaMalloc(&b,smootherBytes));
-    CHECK(cudaMemset(b,0,smootherBytes));
-    const long rBytes = long(n1n1n1)*sizeof(double);
-    double *r = nullptr;
-    CHECK(cudaMalloc(&r,rBytes));
-    CHECK(cudaMemset(r,0,rBytes));
-    double *s = nullptr;
-    CHECK(cudaMalloc(&s,rBytes));
-    CHECK(cudaMemset(s,0,rBytes));
-
-    constexpr dim3 block(4,4,4);
-    const dim3 grid((n-1)/block.x+1,(n-1)/block.y+1,(n-1)/block.z+1);
-    const dim3 grid1((n1-1)/block.x+1,(n1-1)/block.y+1,(n1-1)/block.z+1);
-    double ssLast = 0;
-    for (int iter = 0; iter < nnn; iter++) {
-      ::matmul<<<grid1,block>>>(n,denomX_,denomY_,denomZ_,smoother,r);
-      ::subtract<<<1,1>>>(r,1.0);
-      ::dropEnds<<<grid,block>>>(n,r,b);
-      ::matmul<<<grid1,block>>>(n,denomX_,denomY_,denomZ_,b,s);
-      double rs = 0;
-      CHECK(cublasDdot(handle_,n1n1n1,r,1,s,1,&rs));
-      double ss = 0;
-      CHECK(cublasDdot(handle_,n1n1n1,s,1,s,1,&ss));
-      const double alpha = -rs/ss;
-      CHECK(cublasDaxpy(handle_,nnn,&alpha,b,1,smoother,1));
-      if (idi_+idj_+idk_ == 0) {
-        fprintf(stderr,"# %d rs %g ss %g alpha %g dss %g\n",iter,rs,ss,alpha,std::abs(ss-ssLast)/(ss+ssLast));
-      }
-      if (std::abs(ss-ssLast) < (ss+ssLast)*FLT_EPSILON) break;
-      ssLast = ss;
-    }
-    ::matmul<<<grid1,block>>>(n,denomX_,denomY_,denomZ_,smoother,r);
-    int irMax = 0;
-    CHECK(cublasIdamax(handle_,n1n1n1-1,r+1,1,&irMax));
+    const int m = 2*n;
+    const int mh = m/2+1;
+    cufftHandle d2z, z2d;
+    CHECK(cufftPlan3d(&d2z,m,m,m,CUFFT_D2Z));
+    CHECK(cufftPlan3d(&z2d,m,m,m,CUFFT_Z2D));
+    const long mmm = m*m*m;
+    const long mmmh = m*m*mh;
+    const long dBytes = mmm*sizeof(double);
+    double *d = nullptr;
+    CHECK(cudaMalloc(&d,dBytes));
+    CHECK(cudaMemset(d,0,dBytes));
+    const long middle = m/2+m*(m/2+m*m/2);
+    const double one = 1;
+    CHECK(cudaMemcpy(d+middle,&one,sizeof(one),cudaMemcpyHostToDevice));
+    cufftDoubleComplex *z = nullptr;
+    const long zBytes = mmmh*sizeof(*z);
+    CHECK(cudaMalloc(&z,zBytes));
+    CHECK(cudaMemset(z,0,zBytes));
+    CHECK(cufftExecD2Z(d2z,d,z));
+    constexpr dim3 block(8,8,8);
+    const dim3 gridH((mh-1)/block.x+1,(m-1)/block.y+1,(m-1)/block.z+1);
+    ::solve<<<gridH,block>>>(m,denomX_,denomY_,denomZ_,z);
+    CHECK(cufftExecZ2D(z2d,z,d));
+    const double scale = 1.0/double(mmm);
+    CHECK(cublasDscal(handle_,mmm,&scale,d,1));
+    double *dd = nullptr;
+    CHECK(cudaMalloc(&dd,dBytes));
+    CHECK(cudaMemset(dd,0,dBytes));
+    const dim3 gridM((m-1)/block.x+1,(m-1)/block.y+1,(m-1)/block.z+1);
+    ::flatten<<<gridM,block>>>(m,d,dd);
     CHECK(cudaDeviceSynchronize());
     if (idi_+idj_+idk_ == 0) {
-      for (int i = 0; i < n; i++) printf("%d %g %g %g %g\n",i,smoother[i],r[i],smoother[i+n*(i+n*i)],r[i+n1*(i+n1*i)]);
-      printf("%d 0 %g 0 0\n",n,r[n]);
-      printf("# r[%d] = %g\n",irMax,r[irMax]);
+      for (int i = 0; i < m; i++) {
+        for (int j = 0; j < m; j++) {
+          const int ijk = i+m*(j+m*m/2);
+          printf("%d %d %g %g %g\n",i,j,d[ijk],dd[ijk],d[ijk]+dd[ijk]);
+        }
+        printf("\n");
+      }
     }
     stop();
   }
+  
+  const long smootherBytes = long(nnn)*sizeof(double);
+  CHECK(cudaMalloc(&smoother_,smootherBytes));
 
   double *a = nullptr;
   const long aBytes = long(n1n1n1)*long(nnn)*sizeof(double);
@@ -201,7 +198,6 @@ void Jawfish::initSmoother()
     double bMax = 0;
     CHECK(cudaMemcpy(&bMax,b+iMax-1,sizeof(bMax),cudaMemcpyDeviceToHost));
     fprintf(stderr,"# smoother %d^3, iters %d, max error %g\n",n+n-1,smootherIters_,bMax);
-    printf("%g\n",smoother_[0]);
   }
   CHECK(cudaFree(info));
   CHECK(cudaFree(b));
