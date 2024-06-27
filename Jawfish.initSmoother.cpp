@@ -171,6 +171,4 @@ void Jawfish::initSmoother()
   }
   CHECK(cudaFree(b));
   b = nullptr;
-
-  stop();
 }
