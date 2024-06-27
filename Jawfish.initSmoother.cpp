@@ -94,8 +94,7 @@ __global__ static void diff(const int n, const double denomX, const double denom
 
 void Jawfish::initSmoother()
 {
-  constexpr int smootherRadiusMax = 34;
-  smootherRadius_ = std::min({smootherRadiusMax,di_-1,dj_-1,dk_-1});
+  smootherRadius_ = std::min({di_-1,dj_-1,dk_-1});
   const char *const jawfishSmootherRadius = getenv("JAWFISH_SMOOTHER_RADIUS");
   if (jawfishSmootherRadius) {
     sscanf(jawfishSmootherRadius,"%d",&smootherRadius_);

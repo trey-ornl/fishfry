@@ -1,5 +1,11 @@
 #include "Jawfish.hpp"
 
+__global__ static void offset(const int n, const double offset, const double *const in, double *const __restrict__ out)
+{
+  const int i = threadIdx.x+blockIdx.x*blockDim.x;
+  if (i < n) out[i] = in[i]+offset;
+}
+
 void Jawfish::solve(const size_t bytes, double *const density, double *const potential, std::vector<TimeStamp> &stamps)
 {
   stamps.clear();
@@ -10,7 +16,6 @@ void Jawfish::solve(const size_t bytes, double *const density, double *const pot
   double mySum = 0;
   CHECK(cublasDasum(handle_,n,density,1,&mySum));
   CHECK(cudaEventRecord(event_,0));
-  CHECK(cudaMemset(potential,0,bytes_));
   CHECK(cudaMemset(dPhi_,0,bytes_));
   CHECK(cudaMemcpyAsync(dRho_,density,bytes_,cudaMemcpyDeviceToDevice,0));
 
@@ -44,5 +49,8 @@ void Jawfish::solve(const size_t bytes, double *const density, double *const pot
       if (err <= eps_) break;
     }
   }
-  CHECK(cudaMemcpy(potential,dPhi_,bytes_,cudaMemcpyDeviceToDevice));
+  const double offset = -sum(n,dPhi_)/(double(ni_)*double(nj_)*double(nk_));
+  constexpr int block = 256;
+  const int grid = (n-1)/block+1;
+  ::offset<<<grid,block>>>(n,offset,dPhi_,potential);
 }

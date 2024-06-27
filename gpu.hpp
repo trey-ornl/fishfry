@@ -29,6 +29,7 @@
 #define cublasIdamax hipblasIdamax
 #define cublasSetPointerMode hipblasSetPointerMode
 
+#define cudaDeviceProp hipDeviceProp_t
 #define cudaDeviceSynchronize hipDeviceSynchronize
 #define cudaEvent_t hipEvent_t
 #define cudaEventCreate hipEventCreate
@@ -39,6 +40,7 @@
 #define cudaFreeHost hipHostFree
 #define cudaGetDevice hipGetDevice
 #define cudaGetDeviceCount hipGetDeviceCount
+#define cudaGetDeviceProperties hipGetDeviceProperties
 #define cudaGetLastError hipGetLastError
 #define cudaHostAlloc hipHostMalloc
 #define cudaHostAllocDefault hipHostMallocDefault

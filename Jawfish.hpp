@@ -74,6 +74,8 @@ class Jawfish {
     double *smoother_;
     int smootherIters_;
     int smootherRadius_;
+    double *sum_;
+    int threads_;
 
     void addGlobalDHT();
     void addLocalDST();
@@ -82,6 +84,7 @@ class Jawfish {
     void plot(const double *density, const bool stop = true) const;
     void setLaplacian(const double *in, double *out);
     void smoothSides();
+    double sum(const long n, const double *in);
 
     void printMaxDiff(const char *msg, const double *a, const double *b) const;
     void testSmoothSides();

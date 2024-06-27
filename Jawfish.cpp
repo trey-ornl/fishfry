@@ -146,9 +146,15 @@ Jawfish::Jawfish(const int n[3], const double lo[3], const double hi[3], const i
   CHECK(cudaMalloc((void**)&lapRecv_.buf[5],zBytes));
   CHECK(cudaMalloc((void**)&lapSend_.buf[5],zBytes));
 
+  CHECK(cudaMalloc(&sum_,sizeof(*sum_)));
   CHECK(cudaEventCreate(&event_));
+
+  cudaDeviceProp prop;
+  CHECK(cudaGetDeviceProperties(&prop,0));
+  threads_ = prop.maxThreadsPerMultiProcessor*prop.multiProcessorCount;
+
   CHECK(cudaDeviceSynchronize());
-  testSmoothSides();
+  //testSmoothSides();
 }
 
 Jawfish::~Jawfish()
@@ -156,6 +162,9 @@ Jawfish::~Jawfish()
   CHECK(cudaDeviceSynchronize());
 
   CHECK(cudaEventDestroy(event_));
+
+  CHECK(cudaFree(sum_));
+  sum_ = nullptr;
 
   for (int i = lapNeighbors_-1; i >= 0; i--) {
     CHECK(cudaFree(lapSend_.buf[i]));
