@@ -43,8 +43,7 @@ class RocFFTPencil {
 
   private:
     size_t bytes_; //!< Max bytes needed for argument arrays
-    rocfft_plan c2cfi_,c2cii_;
-    cufftHandle c2cj_,c2rk_,r2ck_; //!< Objects for forward and inverse FFTs
+    rocfft_plan c2cfi_,c2cfj_,c2cii_,c2cij_,c2rk_,r2ck_;
     MPI_Comm commI_,commJ_,commK_; //!< Communicators of fellow tasks in X, Y, and Z pencils
     double ddi_,ddj_,ddk_; //!< Frequency-independent terms in Poisson solve
     int dh_,di_,dj_,dk_; //!< Max number of local points in each dimension

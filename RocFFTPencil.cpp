@@ -76,21 +76,36 @@ RocFFTPencil::RocFFTPencil(const int n[3], const double lo[3], const double hi[3
 
   // FFT objects
   CHECK(rocfft_setup());
-  //CHECK(cufftPlanMany(&c2ci_,1,&ni_,&ni_,1,ni_,&ni_,1,ni_,CUFFT_Z2Z,djp_*dhq_));
   const size_t ni = ni_;
   CHECK(rocfft_plan_create(&c2cfi_,rocfft_placement_notinplace,rocfft_transform_type_complex_forward,rocfft_precision_double,1,&ni,djp_*dhq_,NULL));
   CHECK(rocfft_plan_create(&c2cii_,rocfft_placement_notinplace,rocfft_transform_type_complex_inverse,rocfft_precision_double,1,&ni,djp_*dhq_,NULL));
-  CHECK(cufftPlanMany(&c2cj_,1,&nj_,&nj_,1,nj_,&nj_,1,nj_,CUFFT_Z2Z,dip_*dhq_));
-  CHECK(cufftPlanMany(&c2rk_,1,&nk_,&nh_,1,nh_,&nk_,1,nk_,CUFFT_Z2D,dip_*djq_));
-  CHECK(cufftPlanMany(&r2ck_,1,&nk_,&nk_,1,nk_,&nh_,1,nh_,CUFFT_D2Z,dip_*djq_));
+  const size_t nj = nj_;
+  CHECK(rocfft_plan_create(&c2cfj_,rocfft_placement_notinplace,rocfft_transform_type_complex_forward,rocfft_precision_double,1,&nj,dip_*dhq_,NULL));
+  CHECK(rocfft_plan_create(&c2cij_,rocfft_placement_notinplace,rocfft_transform_type_complex_inverse,rocfft_precision_double,1,&nj,dip_*dhq_,NULL));
+
+  const size_t nk = nk_;
+  CHECK(rocfft_plan_create(&c2rk_,rocfft_placement_notinplace,rocfft_transform_type_real_inverse,rocfft_precision_double,1,&nk,dip_*djq_,NULL));
+  CHECK(rocfft_plan_create(&r2ck_,rocfft_placement_notinplace,rocfft_transform_type_real_forward,rocfft_precision_double,1,&nk,dip_*djq_,NULL));
+  return;
+  int rank = MPI_PROC_NULL;
+  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+  if (rank == 0) {
+    CHECK(rocfft_plan_get_print(r2ck_));
+    CHECK(rocfft_plan_get_print(c2rk_));
+    size_t bsize = 0;
+    CHECK(rocfft_plan_get_work_buffer_size(r2ck_,&bsize));
+    printf("r2ck size %lu\n",bsize);
+    CHECK(rocfft_plan_get_work_buffer_size(c2rk_,&bsize));
+    printf("c2rk size %lu\n",bsize);
+  }
 }
 
 RocFFTPencil::~RocFFTPencil()
 {
-  CHECK(cufftDestroy(r2ck_));
-  CHECK(cufftDestroy(c2rk_));
-  CHECK(cufftDestroy(c2cj_));
-  //CHECK(cufftDestroy(c2ci_));
+  CHECK(rocfft_plan_destroy(r2ck_));
+  CHECK(rocfft_plan_destroy(c2rk_));
+  CHECK(rocfft_plan_destroy(c2cij_));
+  CHECK(rocfft_plan_destroy(c2cfj_));
   CHECK(rocfft_plan_destroy(c2cii_));
   CHECK(rocfft_plan_destroy(c2cfi_));
   CHECK(rocfft_cleanup());
@@ -169,7 +184,7 @@ void RocFFTPencil::solve(const size_t bytes, double *const density, double *cons
   }
 
   // Real-to-complex FFT in Z
-  CHECK(cufftExecD2Z(r2ck_,a,bc));
+  CHECK(rocfft_execute(r2ck_,(void**)(&a),(void**)(&bc),NULL));
 
   // Rearrange for Y redistribution
   {
@@ -216,7 +231,7 @@ void RocFFTPencil::solve(const size_t bytes, double *const density, double *cons
   }
 
   // Forward FFT in Y
-  CHECK(cufftExecZ2Z(c2cj_,ac,bc,CUFFT_FORWARD));
+  CHECK(rocfft_execute(c2cfj_,(void**)(&ac),(void**)(&bc),NULL));
 
   // Rearrange for X redistribution
   {
@@ -263,7 +278,6 @@ void RocFFTPencil::solve(const size_t bytes, double *const density, double *cons
   }
 
   // Forward FFT in X
-  //CHECK(cufftExecZ2Z(c2ci_,ac,bc,CUFFT_FORWARD));
   CHECK(rocfft_execute(c2cfi_,(void**)(&ac),(void**)(&bc),NULL));
 
   // Apply filter in frequency space distributed in X pencils
@@ -293,7 +307,6 @@ void RocFFTPencil::solve(const size_t bytes, double *const density, double *cons
   }
 
   // Backward FFT in X
-  // CHECK(cufftExecZ2Z(c2ci_,ac,bc,CUFFT_INVERSE));
   CHECK(rocfft_execute(c2cii_,(void**)(&ac),(void**)(&bc),NULL));
 
   // Rearrange for Y redistribution
@@ -340,7 +353,7 @@ void RocFFTPencil::solve(const size_t bytes, double *const density, double *cons
   }
 
   // Backward FFT in Y
-  CHECK(cufftExecZ2Z(c2cj_,ac,bc,CUFFT_INVERSE));
+  CHECK(rocfft_execute(c2cij_,(void**)(&ac),(void**)(&bc),NULL));
 
   // Rearrange for Z redistribution
   {
@@ -386,7 +399,7 @@ void RocFFTPencil::solve(const size_t bytes, double *const density, double *cons
   }
 
   // Complex-to-real FFT in Z
-  CHECK(cufftExecZ2D(c2rk_,ac,b));
+  CHECK(rocfft_execute(c2rk_,(void**)(&ac),(void**)(&b),NULL));
 
   // Rearrange for 3D-block redistribution
   {
