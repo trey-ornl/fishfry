@@ -1,6 +1,6 @@
 #!/bin/bash
-module load cpe/23.12
-module load rocm/5.7.1
+module load cpe/26.03
+module load rocm
 module load craype-accel-amd-gfx90a
 module -t list
 export LD_LIBRARY_PATH="${CRAY_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}"

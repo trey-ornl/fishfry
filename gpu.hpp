@@ -8,6 +8,7 @@
 
 #include <hip/hip_runtime.h>
 #include <hipfft/hipfft.h>
+#include <rocfft/rocfft.h>
 
 #ifdef __HIPCC__
 #define __CUDACC__
@@ -58,6 +59,15 @@ static void __attribute__((unused)) check(const hipError_t err, const char *cons
   fflush(stderr);
   exit(err);
 }
+
+static void __attribute__((unused)) check(const rocfft_status err, const char *const file, const int line)
+{
+  if (err == rocfft_status_success) return;
+  fprintf(stderr,"ROCFFT ERROR AT LINE %d OF FILE '%s': %d\n",line,file,err);
+  fflush(stderr);
+  exit(err);
+}
+
 
 #else
 

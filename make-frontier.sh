@@ -1,6 +1,6 @@
 #!/bin/bash
-module load cpe/23.12
-module load rocm/5.7.1
+module load cpe/26.03
+module load rocm
 module load craype-accel-amd-gfx90a
 module list
 set -x
@@ -10,6 +10,6 @@ export CXXFLAGS="-DO_HIP -g -O3 -std=c++11 --offload-arch=gfx90a -Wall -I${CRAY_
 #export CXXFLAGS="-DPARIS_3PT ${CXXFLAGS}"
 export LD=CC
 export LDFLAGS="-DO_HIP -g -O3 -std=c++11 -Wall -L${ROCM_PATH}/lib"
-export LIBS='-lhipfft -lamdhip64'
+export LIBS='-lhipfft -lrocfft -lamdhip64'
 make clean
 make -j

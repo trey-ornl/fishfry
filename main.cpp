@@ -1,8 +1,11 @@
 #include "FishFry.hpp"
-#include "ParisPencil.hpp"
+#include "RocFFTPencil.hpp"
 
 int main(int argc, char **argv)
 {
+#ifdef __HIPCC__
+  CHECK(hipInit(0));
+#endif
   MPI_Init(&argc,&argv);
   int rank = MPI_PROC_NULL;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
@@ -45,7 +48,7 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
-  FishFry<ParisPencil>(nTasks,nPoints).run(nIters);
+  FishFry<RocFFTPencil>(nTasks,nPoints).run(nIters);
   MPI_Finalize();
   return 0;
 }
